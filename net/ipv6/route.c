@@ -2609,6 +2609,31 @@ out:
 	return mtu - lwtunnel_headroom(dst->lwtstate, mtu);
 }
 
+struct rt6_info *rt6_get_dflt_router_expires(struct net_device *dev)
+{
+	struct fib6_info *fb;
+	struct rt6_info *rt;
+	struct fib6_table *table;
+	#define RTF_ADGE (RTF_ADDRCONF | RTF_DEFAULT \
+		| RTF_GATEWAY | RTF_EXPIRES)
+
+	table = fib6_get_table(dev_net(dev),
+			       addrconf_rt_table(dev, RT6_TABLE_MAIN));
+	if (!table)
+		return NULL;
+
+	read_lock_bh(&table->tb6_lock);
+	for (fb = table->tb6_root.leaf; fb; fb = fb->fib6_next) {
+		if (dev == rt->dst.dev &&
+		    ((rt->rt6i_flags & RTF_ADGE) == RTF_ADGE))
+			break;
+	}
+	if (rt)
+		dst_hold(&rt->dst);
+	read_unlock_bh(&table->tb6_lock);
+	return rt;
+}
+
 /* MTU selection:
  * 1. mtu on route is locked - use it
  * 2. mtu from nexthop exception
