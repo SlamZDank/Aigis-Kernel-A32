@@ -4480,8 +4480,7 @@ static inline int nf_ingress(struct sk_buff *skb, struct packet_type **pt_prev,
 	return 0;
 }
 
-static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc,
-				    struct packet_type **ppt_prev)
+static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
 {
 	struct packet_type *ptype, *pt_prev;
 	rx_handler_func_t *rx_handler;
@@ -4629,6 +4628,31 @@ out:
 	return ret;
 }
 
+static int __netif_receive_skb(struct sk_buff *skb)
+{
+	int ret;
+
+	if (sk_memalloc_socks() && skb_pfmemalloc(skb)) {
+		unsigned long pflags = current->flags;
+
+		/*
+		 * PFMEMALLOC skbs are special, they should
+		 * - be delivered to SOCK_MEMALLOC sockets only
+		 * - stay away from userspace
+		 * - have bounded memory usage
+		 *
+		 * Use PF_MEMALLOC as this saves us from propagating the allocation
+		 * context down to all allocation sites.
+		 */
+		current->flags |= PF_MEMALLOC;
+		ret = __netif_receive_skb_core(skb, true);
+		tsk_restore_flags(current, pflags, PF_MEMALLOC);
+	} else
+		ret = __netif_receive_skb_core(skb, false);
+
+	return ret;
+}
+
 /**
  *	netif_receive_skb_core - special purpose version of netif_receive_skb
  *	@skb: buffer to process
@@ -4650,18 +4674,6 @@ int netif_receive_skb_core(struct sk_buff *skb)
 
 	rcu_read_lock();
 	ret = __netif_receive_skb_core(skb, false);
-	rcu_read_unlock();
-
-	return ret;
-}
-EXPORT_SYMBOL(netif_receive_skb_core);
-
-static int __netif_receive_skb(struct sk_buff *skb)
-{
-	int ret;
-
-	rcu_read_lock();
-	ret = __netif_receive_skb_one_core(skb, false);
 	rcu_read_unlock();
 
 	return ret;
