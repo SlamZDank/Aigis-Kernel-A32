@@ -4592,18 +4592,6 @@ out:
 	return ret;
 }
 
-static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
-{
-	struct net_device *orig_dev = skb->dev;
-	struct packet_type *pt_prev = NULL;
-	int ret;
-
-	ret = __netif_receive_skb_core(skb, pfmemalloc, &pt_prev);
-	if (pt_prev)
-		ret = pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
-	return ret;
-}
-
 /**
  *	netif_receive_skb_core - special purpose version of netif_receive_skb
  *	@skb: buffer to process
@@ -4620,6 +4608,18 @@ static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
  *	NET_RX_DROP: packet was dropped
  */
 int netif_receive_skb_core(struct sk_buff *skb)
+{
+	int ret;
+
+	rcu_read_lock();
+	ret = __netif_receive_skb_core(skb, false);
+	rcu_read_unlock();
+
+	return ret;
+}
+EXPORT_SYMBOL(netif_receive_skb_core);
+
+static int __netif_receive_skb(struct sk_buff *skb)
 {
 	int ret;
 
