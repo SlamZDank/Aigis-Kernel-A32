@@ -1140,15 +1140,8 @@ static void gc_worker(struct work_struct *work)
 		 * we will just continue with next hash slot.
 		 */
 		rcu_read_unlock();
-		cond_resched_rcu_qs();
-		i++;
-
-		if (time_after(jiffies, end_time) && i < hashsz) {
-			gc_work->next_bucket = i;
-			next_run = 0;
-			break;
-		}
-	} while (i < hashsz);
+		cond_resched_tasks_rcu_qs();
+	} while (++buckets < goal);
 
 	if (gc_work->exiting)
 		return;
