@@ -2894,7 +2894,7 @@ int security_get_bools(struct selinux_state *state,
 	struct policydb *policydb;
 	int i, rc;
 
-	if (!ss_initialized) {// SEC_SELINUX_PORTING_COMMON Change to use RKP 
+	if (!state->initialized) {
 		*len = 0;
 		*names = NULL;
 		*values = NULL;
@@ -3234,12 +3234,12 @@ int security_get_classes(struct selinux_state *state,
 	struct policydb *policydb = &state->ss->policydb;
 	int rc;
 
-
-	if (!ss_initialized) {// SEC_SELINUX_PORTING_COMMON Change to use RKP 
+	if (!state->initialized) {
 		*nclasses = 0;
 		*classes = NULL;
 		return 0;
 	}
+
 	read_lock(&state->ss->policy_rwlock);
 
 	rc = -ENOMEM;
