@@ -4087,27 +4087,6 @@ static void selinux_cred_free(struct cred *cred)
 {
 	struct task_security_struct *tsec = cred->security;
 
-	/*
-	 * cred->security == NULL if security_cred_alloc_blank() or
-	 * security_prepare_creds() returned an error.
-	 */
-	BUG_ON(cred->security && (unsigned long) cred->security < PAGE_SIZE);
-#ifdef CONFIG_KDP_CRED
-	if (rkp_ro_page((unsigned long)cred))
-		uh_call(UH_APP_RKP, RKP_KDP_X45, (u64)&cred->security, 7, 0, 0);
-	else
-#endif
-#ifdef CONFIG_RUSTUH_KDP_CRED
-	if (is_kdp_protect_addr((unsigned long)cred)) {
-		uh_call(UH_APP_KDP, SELINUX_CRED_FREE, (u64)&cred->security, 7, 0, 0);
-	} else
-#endif
-	cred->security = (void *) 0x7UL;
-#ifdef CONFIG_KDP_CRED
-	rkp_free_security((unsigned long)tsec);
-#elif defined(CONFIG_RUSTUH_KDP_CRED)
-	kdp_free_security((unsigned long)tsec);
-#else
 	kfree(tsec);
 #endif
 }
