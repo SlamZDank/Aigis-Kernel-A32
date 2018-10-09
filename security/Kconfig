@@ -272,18 +272,14 @@ config DEFAULT_SECURITY
 	default "apparmor" if DEFAULT_SECURITY_APPARMOR
 	default "" if DEFAULT_SECURITY_DAC
 
-config SDP
-	bool "Enables SDP"
-	default n
+config LSM
+	string "Ordered list of enabled LSMs"
+	default "integrity"
 	help
-	Sensitive Data Protection. Enabled for devices with Samsung Knox.
+	  A comma-separated list of LSMs, in initialization order.
+	  Any LSMs left off this list will be ignored.
 
-config SDP_KEY_DUMP
-	bool "SDP KEY DUMP"
-	default n
-	help
-	For dumping sensitive keying material for CC Certification test.
-	Enabled only for eng and userdebug builds.
+	  If unsure, leave this as the default.
 
 source "security/Kconfig.hardening"
 
