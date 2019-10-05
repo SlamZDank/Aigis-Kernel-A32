@@ -2164,7 +2164,7 @@ static enum sctp_ierror sctp_verify_param(struct net *net,
 		if (!ep->asconf_enable)
 			goto unhandled;
 		if (!net->sctp.addip_enable)
-			goto fallthrough;
+			goto unhandled;
 
 		if (ntohs(param.p->length) < sizeof(struct sctp_addip_param) +
 					     sizeof(struct sctp_paramhdr)) {
