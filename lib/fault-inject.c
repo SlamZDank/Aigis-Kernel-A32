@@ -111,8 +111,10 @@ bool should_fail(struct fault_attr *attr, ssize_t size)
 		unsigned int fail_nth = READ_ONCE(current->fail_nth);
 
 		if (fail_nth) {
-			WRITE_ONCE(current->fail_nth, fail_nth - 1);
-			if (fail_nth == 1)
+			fail_nth--;
+
+			WRITE_ONCE(current->fail_nth, fail_nth);
+			if (!fail_nth)
 				goto fail;
 
 			return false;
