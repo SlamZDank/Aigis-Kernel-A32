@@ -21,9 +21,13 @@
 #include "data_mgmt.h"
 #include "format.h"
 #include "internal.h"
-#include "pseudo_files.h"
-#include "sysfs.h"
-#include "verity.h"
+
+#define INCFS_PENDING_READS_INODE 2
+#define INCFS_LOG_INODE 3
+#define INCFS_START_INO_RANGE 10
+#define READ_FILE_MODE 0444
+#define READ_EXEC_FILE_MODE 0555
+#define READ_WRITE_FILE_MODE 0666
 
 static int incfs_remount_fs(struct super_block *sb, int *flags, char *data);
 
