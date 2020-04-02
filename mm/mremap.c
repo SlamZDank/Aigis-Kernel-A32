@@ -370,6 +370,7 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 			/* Always put back VM_ACCOUNT since we won't unmap */
 			vma->vm_flags |= VM_ACCOUNT;
 
+<<<<<<< HEAD
 			vm_acct_memory(new_len >> PAGE_SHIFT);
 		}
 
@@ -384,6 +385,11 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 		if (split && new_vma == vma)
 			split = 0;
 
+=======
+			vm_acct_memory(vma_pages(new_vma));
+		}
+
+>>>>>>> 0e4168646b7e (BACKPORT: mm/mremap: add MREMAP_DONTUNMAP to mremap())
 		/* We always clear VM_LOCKED[ONFAULT] on the old vma */
 		vma->vm_flags &= VM_LOCKED_CLEAR_MASK;
 
