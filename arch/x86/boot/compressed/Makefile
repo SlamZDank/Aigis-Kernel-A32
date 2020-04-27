@@ -56,6 +56,10 @@ LDFLAGS += $(shell $(LD) --help 2>&1 | grep -q "\-z noreloc-overflow" \
 	&& echo "-z noreloc-overflow -pie --no-dynamic-linker")
 endif
 
+ifeq ($(CONFIG_RELOCATABLE), y)
+LDFLAGS += -z notext
+endif
+
 LDFLAGS += -z noexecstack
 LDFLAGS += $(call ld-option,--no-warn-rwx-segments)
 
