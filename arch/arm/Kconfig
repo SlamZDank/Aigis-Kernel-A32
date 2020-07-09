@@ -2268,3 +2268,4 @@ endif
 source "lib/Kconfig"
 
 source "arch/arm/kvm/Kconfig"
+source "arch/arm/Kconfig.assembler"
