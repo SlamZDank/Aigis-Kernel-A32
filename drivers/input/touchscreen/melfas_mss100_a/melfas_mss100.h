@@ -395,6 +395,10 @@ struct mms_ts_info {
 	struct delayed_work work_read_info;
 	bool info_work_done;
 
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_MSS100_FOD_SUPPORT
+	bool fod_pressed;
+#endif
+
 	bool lowpower_mode;
 	unsigned char lowpower_flag;
 
