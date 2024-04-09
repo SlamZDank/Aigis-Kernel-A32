@@ -254,11 +254,7 @@ void unix_gc(void)
 		struct sock *sk = &u->sk;
 		long total_refs;
 
-<<<<<<< HEAD
 		total_refs = file_count(sk->sk_socket->file);
-=======
-		total_refs = file_count(u->sk.sk_socket->file);
->>>>>>> 40d8d26e718b (af_unix: Do not use atomic ops for unix_sk(sk)->inflight.)
 
 		BUG_ON(!u->inflight);
 		BUG_ON(total_refs < u->inflight);
