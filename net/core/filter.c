@@ -2210,11 +2210,6 @@ static int bpf_skb_proto_6_to_4(struct sk_buff *skb)
 			shinfo->gso_type |=  SKB_GSO_TCPV4;
 		}
 
-<<<<<<< HEAD
-=======
-		/* Due to IPv4 header, MSS can be upgraded. */
-		skb_increase_gso_size(shinfo, len_diff);
->>>>>>> 19b468b254ac (bpf: fix bpf_skb_adjust_net/bpf_skb_proto_xlat to deal with gso sctp skbs)
 		/* Header must be checked, and gso_segs recomputed. */
 		shinfo->gso_type |= SKB_GSO_DODGY;
 		shinfo->gso_segs = 0;
