@@ -3994,21 +3994,11 @@ static int do_read_fault(struct vm_fault *vmf)
 	 * something).
 	 */
 	if (vma->vm_ops->map_pages && fault_around_bytes >> PAGE_SHIFT > 1) {
-<<<<<<< HEAD
-		ret = do_fault_around(vmf);
-		if (ret)
-			return ret;
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	} else if (vma->vm_ops->map_pages && fault_around_bytes >> PAGE_SHIFT == 1) {
-		record_io_info(vma->vm_file, vmf->pgoff, 1);
-#endif
-=======
 		if (likely(!userfaultfd_minor(vmf->vma))) {
 			ret = do_fault_around(vmf);
 			if (ret)
 				return ret;
 		}
->>>>>>> 56b8d5547238 (BACKPORT: FROMGIT: userfaultfd: support minor fault handling for shmem)
 	}
 
 	ret = __do_fault(vmf);
