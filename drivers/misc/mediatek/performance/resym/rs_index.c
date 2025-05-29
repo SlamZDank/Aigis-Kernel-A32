@@ -290,7 +290,7 @@ static void rs_start_collect(void)
 
 	spin_unlock_irqrestore(&rs_loading_slock, flags);
 
-	register_trace_perf_index_l(rs_update_io_stat, NULL);
+	//register_trace_perf_index_l(rs_update_io_stat, NULL);
 
 	rsi_get_data(&sysdata);
 }
@@ -312,7 +312,7 @@ static void rs_stop_collect(void)
 	rs_reset_io_list_locked();
 	spin_unlock_irqrestore(&rs_loading_slock, flags);
 
-	unregister_trace_perf_index_l(rs_update_io_stat, NULL);
+	//unregister_trace_perf_index_l(rs_update_io_stat, NULL);
 
 	prev_ts = 0;
 }
