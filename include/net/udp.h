@@ -175,9 +175,6 @@ struct sk_buff *udp_gro_receive(struct list_head *head, struct sk_buff *skb,
 int udp_gro_complete(struct sk_buff *skb, int nhoff, udp_lookup_t lookup);
 
 struct sk_buff *__udp_gso_segment(struct sk_buff *gso_skb,
-				  netdev_features_t features);
-
-struct sk_buff *__udp_gso_segment(struct sk_buff *gso_skb,
 				  netdev_features_t features,
 				  unsigned int mss, __sum16 check);
 
