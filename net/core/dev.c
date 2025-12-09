@@ -4610,7 +4610,7 @@ skip_classify:
 	if (pt_prev) {
 		if (unlikely(skb_orphan_frags_rx(skb, GFP_ATOMIC)))
 			goto drop;
-		*ppt_prev = pt_prev;
+//		*ppt_prev = pt_prev;
 	} else {
 drop:
 		if (!deliver_exact)
