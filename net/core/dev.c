@@ -4628,31 +4628,6 @@ out:
 	return ret;
 }
 
-static int __netif_receive_skb(struct sk_buff *skb)
-{
-	int ret;
-
-	if (sk_memalloc_socks() && skb_pfmemalloc(skb)) {
-		unsigned long pflags = current->flags;
-
-		/*
-		 * PFMEMALLOC skbs are special, they should
-		 * - be delivered to SOCK_MEMALLOC sockets only
-		 * - stay away from userspace
-		 * - have bounded memory usage
-		 *
-		 * Use PF_MEMALLOC as this saves us from propagating the allocation
-		 * context down to all allocation sites.
-		 */
-		current->flags |= PF_MEMALLOC;
-		ret = __netif_receive_skb_core(skb, true);
-		tsk_restore_flags(current, pflags, PF_MEMALLOC);
-	} else
-		ret = __netif_receive_skb_core(skb, false);
-
-	return ret;
-}
-
 /**
  *	netif_receive_skb_core - special purpose version of netif_receive_skb
  *	@skb: buffer to process
@@ -4853,7 +4828,7 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 	}
 	list_splice_init(&sublist, head);
 
-	if (static_key_false(&generic_xdp_needed)) {
+	if (static_key_false(&generic_xdp_needed_key)) {
 		preempt_disable();
 		rcu_read_lock();
 		list_for_each_entry_safe(skb, next, head, list) {
