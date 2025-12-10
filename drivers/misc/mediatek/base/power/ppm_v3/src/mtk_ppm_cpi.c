@@ -288,7 +288,7 @@ static void ppm_cpi_pmu_enable_locked(int cpu, int enable)
 		if (i_event) {
 			perf_event_enable(i_event);
 			perf_event_read_local(i_event,
-					      &per_cpu(inst_count, cpu));
+					      &per_cpu(inst_count, cpu), NULL, NULL);
 		}
 		if (p1_event)
 			perf_event_enable(p1_event);
