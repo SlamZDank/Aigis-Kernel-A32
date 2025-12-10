@@ -12,6 +12,7 @@
  *      compression (see scripts/kallsyms.c for a more complete description)
  */
 #include <linux/kallsyms.h>
+#include <linux/module.h>
 #include <linux/init.h>
 #include <linux/seq_file.h>
 #include <linux/fs.h>
@@ -19,10 +20,12 @@
 #include <linux/err.h>
 #include <linux/proc_fs.h>
 #include <linux/sched.h>	/* for cond_resched */
+#include <linux/mm.h>
 #include <linux/ctype.h>
 #include <linux/slab.h>
 #include <linux/filter.h>
 #include <linux/compiler.h>
+#include <asm/sections.h>
 
 #ifdef CONFIG_KALLSYMS_ALL
 #define all_var 1
@@ -53,37 +56,36 @@ extern const u16 kallsyms_token_index[] __weak;
 
 extern const unsigned long kallsyms_markers[] __weak;
 
-#if defined(CONFIG_SEC_DEBUG)
-void sec_debug_set_kallsyms_info(struct sec_debug_ksyms *ksyms, int magic)
+static inline int is_kernel_inittext(unsigned long addr)
 {
-	if (!IS_ENABLED(CONFIG_KALLSYMS_BASE_RELATIVE)) {
-		ksyms->addresses_pa = __pa(kallsyms_addresses);
-		ksyms->relative_base = 0x0;
-		ksyms->offsets_pa = 0x0;
-	} else {
-		ksyms->addresses_pa = 0x0;
-		ksyms->relative_base = (uint64_t)kallsyms_relative_base;
-		ksyms->offsets_pa = __pa(kallsyms_offsets);
-	}
-
-	ksyms->names_pa = __pa(kallsyms_names);
-	ksyms->num_syms = kallsyms_num_syms;
-	ksyms->token_table_pa = __pa(kallsyms_token_table);
-	ksyms->token_index_pa = __pa(kallsyms_token_index);
-	ksyms->markers_pa = __pa(kallsyms_markers);
-
-	ksyms->sect.sinittext = (uint64_t)_sinittext;
-	ksyms->sect.einittext = (uint64_t)_einittext;
-	ksyms->sect.stext = (uint64_t)_stext;
-	ksyms->sect.etext = (uint64_t)_etext;
-	ksyms->sect.end = (uint64_t)_end;
-
-	ksyms->kallsyms_all = all_var;
-
-	ksyms->magic = magic;
-	ksyms->kimage_voffset = kimage_voffset;
+	if (addr >= (unsigned long)_sinittext
+	    && addr <= (unsigned long)_einittext)
+		return 1;
+	return 0;
 }
-#endif
+
+static inline int is_kernel_text(unsigned long addr)
+{
+	if ((addr >= (unsigned long)_stext && addr <= (unsigned long)_etext) ||
+	    arch_is_kernel_text(addr))
+		return 1;
+	return in_gate_area_no_mm(addr);
+}
+
+static inline int is_kernel(unsigned long addr)
+{
+	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
+		return 1;
+	return in_gate_area_no_mm(addr);
+}
+
+static int is_ksym_addr(unsigned long addr)
+{
+	if (IS_ENABLED(CONFIG_KALLSYMS_ALL))
+		return is_kernel(addr);
+
+	return is_kernel_text(addr) || is_kernel_inittext(addr);
+}
 
 /*
  * Expand a compressed symbol data into the resulting uncompressed string,
