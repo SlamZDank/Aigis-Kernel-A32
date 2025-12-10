@@ -56,37 +56,6 @@ extern const u16 kallsyms_token_index[] __weak;
 
 extern const unsigned long kallsyms_markers[] __weak;
 
-static inline int is_kernel_inittext(unsigned long addr)
-{
-	if (addr >= (unsigned long)_sinittext
-	    && addr <= (unsigned long)_einittext)
-		return 1;
-	return 0;
-}
-
-static inline int is_kernel_text(unsigned long addr)
-{
-	if ((addr >= (unsigned long)_stext && addr <= (unsigned long)_etext) ||
-	    arch_is_kernel_text(addr))
-		return 1;
-	return in_gate_area_no_mm(addr);
-}
-
-static inline int is_kernel(unsigned long addr)
-{
-	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
-		return 1;
-	return in_gate_area_no_mm(addr);
-}
-
-static int is_ksym_addr(unsigned long addr)
-{
-	if (IS_ENABLED(CONFIG_KALLSYMS_ALL))
-		return is_kernel(addr);
-
-	return is_kernel_text(addr) || is_kernel_inittext(addr);
-}
-
 /*
  * Expand a compressed symbol data into the resulting uncompressed string,
  * if uncompressed string is too long (>= maxlen), it will be truncated,
