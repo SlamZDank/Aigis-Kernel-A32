@@ -4733,10 +4733,10 @@ static int __netif_receive_skb(struct sk_buff *skb)
 		 * context down to all allocation sites.
 		 */
 		noreclaim_flag = memalloc_noreclaim_save();
-		ret = __netif_receive_skb_one_core(skb, true);
+		ret = __netif_receive_skb_core(skb, true);
 		memalloc_noreclaim_restore(noreclaim_flag);
 	} else
-		ret = __netif_receive_skb_one_core(skb, false);
+		ret = __netif_receive_skb_core(skb, false);
 
 	return ret;
 }
@@ -4858,7 +4858,7 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 		}
 	}
 #endif
-	__netif_receive_skb_list(head);
+	__netif_receive_skb(head);
 	rcu_read_unlock();
 }
 
@@ -5479,7 +5479,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 			list_add_tail(&skb->list, &sd->skb_rx_list);
 			if (++work >= quota) {
 				rcu_read_lock();
-				__netif_receive_skb_list(&sd->skb_rx_list);
+				__netif_receive_skb(&sd->skb_rx_list);
 				rcu_read_unlock();
 				INIT_LIST_HEAD(&sd->skb_rx_list);
 				return work;
@@ -5488,7 +5488,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 
 		if (!list_empty(&sd->skb_rx_list)) {
 			rcu_read_lock();
-			__netif_receive_skb_list(&sd->skb_rx_list);
+			__netif_receive_skb(&sd->skb_rx_list);
 			rcu_read_unlock();
 			INIT_LIST_HEAD(&sd->skb_rx_list);
 		}
