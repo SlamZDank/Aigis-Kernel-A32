@@ -94,15 +94,11 @@ bool f2fs_available_free_memory(struct f2fs_sb_info *sbi, int type)
 		/* @fs.sec -- a8f1fe6ef2c636b244d6b55a363ebe61 -- */
 		/* it allows 50% / total_ram for inmemory pages */
 		mem_size = get_pages(sbi, F2FS_INMEM_PAGES);
-<<<<<<< HEAD
-		res = mem_size < (val.totalram / 2);
-=======
 		res = mem_size < (val.totalram / 5);
 	} else if (type == DISCARD_CACHE) {
 		mem_size = (atomic_read(&dcc->discard_cmd_cnt) *
 				sizeof(struct discard_cmd)) >> PAGE_SHIFT;
 		res = mem_size < (avail_ram * nm_i->ram_thresh / 100);
->>>>>>> d62592553cf0 (BACKPORT: f2fs: allow to change discard policy based on cached discard cmds)
 	} else {
 		if (!sbi->sb->s_bdi->wb.dirty_exceeded)
 			return true;
