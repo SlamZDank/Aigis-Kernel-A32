@@ -17,6 +17,7 @@
 #include <linux/task_integrity.h>
 #include <linux/file.h>
 #include <linux/fs.h>
+#include <linux/init.h>
 #include <linux/slab.h>
 #include "five_porting.h"
 #include "five_testing.h"
@@ -45,7 +46,7 @@ static int __init task_integrity_cache_init(void)
 	return 0;
 }
 
-security_initcall(task_integrity_cache_init);
+late_initcall(task_integrity_cache_init);
 
 struct task_integrity *task_integrity_alloc(void)
 {

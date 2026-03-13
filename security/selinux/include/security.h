@@ -73,6 +73,7 @@
 
 struct netlbl_lsm_secattr;
 
+extern int selinux_enabled;
 extern int selinux_enabled_boot;
 
 /* Policy capabilities */
@@ -140,7 +141,7 @@ static inline void selinux_mark_initialized(struct selinux_state *state)
 extern int selinux_enforcing;							 
 static inline bool enforcing_enabled(struct selinux_state *state)
 {
-	return READ_ONCE(state->enforcing);
+	return READ_ONCE(selinux_enforcing); // SEC_SELINUX_PORTING_COMMON Change to use RKP
 }
 
 static inline void enforcing_set(struct selinux_state *state, bool value)
