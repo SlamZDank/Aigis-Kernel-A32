@@ -6,16 +6,16 @@
 #edit the zyc clang directory name accordingly to ur toolchain.
 export TC=/home/vigus/zyc-clang
 
-export CROSS_COMPILE=$(TC)/bin/aarch64-linux-gnu-
-export LD=$(TC)/bin/ld.lld
-export OBJCOPY=$(TC)/bin/llvm-objcopy
-export AS=$(TC)/bin/llvm-as
-export NM=$(TC)/bin/llvm-nm
-export STRIP=$(TC)/bin/llvm-strip
-export OBJDUMP=$(TC)/bin/llvm-objdump
-export READELF=$(TC)/bin/llvm-readelf
-export CC=$(TC)/bin/clang
-export CROSS_COMPILE_ARM32=$(TC)/bin/arm-linux-gnueabi-
+export CROSS_COMPILE=$TC/bin/aarch64-linux-gnu-
+export LD=$TC/bin/ld.lld
+export OBJCOPY=$TC/bin/llvm-objcopy
+export AS=$TC/bin/llvm-as
+export NM=$TC/bin/llvm-nm
+export STRIP=$TC/bin/llvm-strip
+export OBJDUMP=$TC/bin/llvm-objdump
+export READELF=$TC/bin/llvm-readelf
+export CC=$TC/bin/clang
+export CROSS_COMPILE_ARM32=$TC/bin/arm-linux-gnueabi-
 export ARCH=arm64
 export ANDROID_MAJOR_VERSION=r
 
