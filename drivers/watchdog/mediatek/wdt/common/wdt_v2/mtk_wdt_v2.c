@@ -436,8 +436,19 @@ int mtk_wdt_enable(enum wk_wdt_en en)
 }
 int  mtk_wdt_confirm_hwreboot(void)
 {
+		struct device_node *np_rgu = NULL;
 	/* aee need confirm wd can hw reboot */
 	/* pr_debug("mtk_wdt_probe : Initialize to dual mode\n"); */
+		if (!toprgu_base) {
+			for_each_matching_node(np_rgu, rgu_of_match)
+				break;
+
+			if(np_rgu)
+				toprgu_base = of_iomap(np_rgu, 0);
+
+			if(!toprgu_base)
+			return -ENODEV;
+		}
 	mtk_wdt_mode_config_nolock(TRUE, TRUE, TRUE, FALSE, TRUE);
 	return 0;
 }

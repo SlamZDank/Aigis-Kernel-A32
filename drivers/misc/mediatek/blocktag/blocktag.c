@@ -255,13 +255,13 @@ static void mtk_btag_mictx_reset(
 #if IS_ENABLED(CONFIG_SCHED_TUNE)
 static int mtk_btag_get_schedtune_cgrp_id(struct task_struct *t)
 {
-	struct cgroup *grp;
+	struct cgroup_subsys_state *css;
 
 	rcu_read_lock();
-	grp = task_cgroup(t, schedtune_cgrp_id);
+	css = task_css(t, schedtune_cgrp_id);
 	rcu_read_unlock();
 
-	return grp->id;
+	return css->id;
 }
 
 #define TOP_APP_GROUP_ID (4)
