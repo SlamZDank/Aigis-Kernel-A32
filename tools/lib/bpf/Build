@@ -1,1 +1,1 @@
-libbpf-y := libbpf.o bpf.o
+libbpf-y := libbpf.o bpf.o btf.o str_error.o hashmap.o libbpf_probes.o

@@ -278,10 +278,39 @@
 		.off   = 0,					\
 		.imm   = ((__u64) (IMM)) >> 32 })
 
+#define BPF_LD_IMM64_RAW_FULL(DST, SRC, OFF1, OFF2, IMM1, IMM2)	\
+	((struct bpf_insn) {					\
+		.code  = BPF_LD | BPF_DW | BPF_IMM,		\
+		.dst_reg = DST,					\
+		.src_reg = SRC,					\
+		.off   = OFF1,					\
+		.imm   = IMM1 }),				\
+	((struct bpf_insn) {					\
+		.code  = 0, /* zero is reserved opcode */	\
+		.dst_reg = 0,					\
+		.src_reg = 0,					\
+		.off   = OFF2,					\
+		.imm   = IMM2 })
+
 /* pseudo BPF_LD_IMM64 insn used to refer to process-local map_fd */
 
 #define BPF_LD_MAP_FD(DST, MAP_FD)				\
-	BPF_LD_IMM64_RAW(DST, BPF_PSEUDO_MAP_FD, MAP_FD)
+	BPF_LD_IMM64_RAW_FULL(DST, BPF_PSEUDO_MAP_FD, 0, 0,	\
+			      MAP_FD, 0)
+
+#define BPF_LD_MAP_VALUE(DST, MAP_FD, VALUE_OFF)		\
+	BPF_LD_IMM64_RAW_FULL(DST, BPF_PSEUDO_MAP_VALUE, 0, 0,	\
+			      MAP_FD, VALUE_OFF)
+
+/* Relative call */
+
+#define BPF_CALL_REL(TGT)					\
+	((struct bpf_insn) {					\
+		.code  = BPF_JMP | BPF_CALL,			\
+		.dst_reg = 0,					\
+		.src_reg = BPF_PSEUDO_CALL,			\
+		.off   = 0,					\
+		.imm   = TGT })
 
 /* Program exit */
 
@@ -293,4 +322,4 @@
 		.off   = 0,					\
 		.imm   = 0 })
 
-#endif /* __TOOLS_LINUX_FILTER_H */
+#endif /* __TOOLS_LINUX_FILTER_H */	
