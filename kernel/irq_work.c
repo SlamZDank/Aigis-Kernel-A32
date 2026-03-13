@@ -140,6 +140,7 @@ bool irq_work_needs_cpu(void)
 
 static void irq_work_run_list(struct llist_head *list)
 {
+	unsigned long long ts;
 	struct irq_work *work, *tmp;
 	struct llist_node *llnode;
 	int flags;

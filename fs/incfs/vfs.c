@@ -21,6 +21,9 @@
 #include "data_mgmt.h"
 #include "format.h"
 #include "internal.h"
+#include "pseudo_files.h"
+#include "sysfs.h"
+#include "verity.h"
 
 #define INCFS_PENDING_READS_INODE 2
 #define INCFS_LOG_INODE 3
