@@ -4194,8 +4194,8 @@ errout:
 	return ERR_PTR(err);
 }
 
-extern char __weak _binary__btf_vmlinux_bin_start[];
-extern char __weak _binary__btf_vmlinux_bin_end[];
+extern char __weak __start_BTF[];
+extern char __weak __stop_BTF[];
 extern struct btf *btf_vmlinux;
 
 #define BPF_MAP_TYPE(_id, _ops)
@@ -4324,8 +4324,12 @@ static int btf_vmlinux_map_ids_init(const struct btf *btf,
 		}
 		btf_id = btf_find_by_name_kind(btf, ops->map_btf_name,
 					       BTF_KIND_STRUCT);
-		if (btf_id < 0)
+		if (btf_id < 0) {
+			bpf_log(log,
+				"vmlinux BTF: map type %d missing struct '%s' (%d)\n",
+				i, ops->map_btf_name, btf_id);
 			return btf_id;
+		}
 		*ops->map_btf_id = btf_id;
 	}
 
@@ -4371,31 +4375,38 @@ struct btf *btf_parse_vmlinux(void)
 	}
 	env->btf = btf;
 
-	btf->data = _binary__btf_vmlinux_bin_start;
-	btf->data_size = _binary__btf_vmlinux_bin_end -
-		_binary__btf_vmlinux_bin_start;
+	btf->data = __start_BTF;
+	btf->data_size = __stop_BTF - __start_BTF;
 
 	err = btf_parse_hdr(env);
-	if (err)
+	if (err) {
+		pr_err("BPF:vmlinux BTF parse_hdr failed: %d\n", err);
 		goto errout;
+	}
 
 	btf->nohdr_data = btf->data + btf->hdr.hdr_len;
 
 	err = btf_parse_str_sec(env);
-	if (err)
+	if (err) {
+		pr_err("BPF:vmlinux BTF parse_str_sec failed: %d\n", err);
 		goto errout;
+	}
 
 	err = btf_check_all_metas(env);
-	if (err)
+	if (err) {
+		pr_err("BPF:vmlinux BTF check_all_metas failed: %d\n", err);
 		goto errout;
+	}
 
 	/* btf_parse_vmlinux() runs under bpf_verifier_lock */
 	bpf_ctx_convert.t = btf_type_by_id(btf, bpf_ctx_convert_btf_id[0]);
 
 	/* find bpf map structs for map_ptr access checking */
 	err = btf_vmlinux_map_ids_init(btf, log);
-	if (err < 0)
+	if (err < 0) {
+		pr_err("BPF:vmlinux BTF map_ids_init failed: %d\n", err);
 		goto errout;
+	}
 
 	bpf_struct_ops_init(btf, log);
 
