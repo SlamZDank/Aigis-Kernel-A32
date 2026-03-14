@@ -356,6 +356,7 @@ static inline void sk_psock_update_proto(struct sock *sk,
 		struct proto *orig = READ_ONCE(sk->sk_prot);
 
 		psock->saved_unhash = orig->unhash;
+		psock->saved_destroy = orig->destroy;
 		psock->saved_close = orig->close;
 		psock->saved_write_space = sk->sk_write_space;
 

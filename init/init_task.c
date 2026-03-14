@@ -95,6 +95,7 @@ struct task_struct init_task
 	.group_leader	= &init_task,
 	RCU_POINTER_INITIALIZER(real_cred, &init_cred),
 	RCU_POINTER_INITIALIZER(cred, &init_cred),
+	INIT_INTEGRITY(init_task)
 	.comm		= INIT_TASK_COMM,
 	.thread		= INIT_THREAD,
 	.fs		= &init_fs,
