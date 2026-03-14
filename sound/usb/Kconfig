@@ -169,6 +169,12 @@ config MTK_UAC_POWER_SAVING
 	  To select the MediaTek USB driver using sram and enter power
 	  saving mode when cpu is idle.
 
+config IS_22
+	tristate "a22 fix smth in code"
+	default n
+	help
+	  import a code from a22 source
+
 source "sound/usb/line6/Kconfig"
 
 endif	# SND_USB
