@@ -1048,6 +1048,12 @@ config HID_ALPS
 	Say Y here if you have a Alps touchpads over i2c-hid or usbhid
 	and want support for its special functionalities.
 
+config IS_22
+	tristate "gore"
+	default n
+	---help---
+	kang 1 thing from a22
+
 endmenu
 
 endif # HID
