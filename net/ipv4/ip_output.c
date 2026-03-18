@@ -1154,6 +1154,8 @@ static int ip_setup_cork(struct sock *sk, struct inet_cork *cork,
 		cork->addr = ipc->addr;
 	}
 
+	cork->gso_size = sk->sk_type == SOCK_DGRAM ? ipc->gso_size : 0;
+
 	cork->dst = &rt->dst;
 	/* We stole this route, caller should not release it. */
 	*rtp = NULL;
