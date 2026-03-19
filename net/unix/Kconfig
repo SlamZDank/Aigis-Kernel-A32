@@ -31,3 +31,7 @@ config UNIX_DIAG
 	---help---
 	  Support for UNIX socket monitoring interface used by the ss tool.
 	  If unsure, say Y.
+
+config IS_M32
+	tristate "m32 gore unix"
+	default n

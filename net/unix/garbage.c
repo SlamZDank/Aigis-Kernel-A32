@@ -171,18 +171,29 @@ static void scan_children(struct sock *x, void (*func)(struct unix_sock *),
 
 static void dec_inflight(struct unix_sock *usk)
 {
+	#ifdef CONFIG_IS_M32
+	atomic_long_dec(&usk->inflight);
+	#else
 	usk->inflight--;
+	#endif
 }
 
 static void inc_inflight(struct unix_sock *usk)
 {
+	#ifdef CONFIG_IS_M32
+	atomic_long_inc(&usk->inflight);
+	#else
 	usk->inflight++;
+	#endif
 }
 
 static void inc_inflight_move_tail(struct unix_sock *u)
 {
+	#ifdef CONFIG_IS_M32
+	atomic_long_inc(&u->inflight);
+	#else
 	u->inflight++;
-
+	#endif
 	/* If this still might be part of a cycle, move it to the end
 	 * of the list, so that it's checked even if it was already
 	 * passed over
@@ -251,22 +262,34 @@ void unix_gc(void)
 	 * consecutive scan_children() calls.
 	 */
 	list_for_each_entry_safe(u, next, &gc_inflight_list, link) {
-		struct sock *sk = &u->sk;
 		long total_refs;
+		#ifdef CONFIG_IS_M32
+			long inflight_refs;
 
-		total_refs = file_count(sk->sk_socket->file);
+			total_refs = file_count(u->sk.sk_socket->file);
+			inflight_refs = atomic_long_read(&u->inflight);
 
-		BUG_ON(!u->inflight);
-		BUG_ON(total_refs < u->inflight);
-		if (total_refs == u->inflight) {
-			list_move_tail(&u->link, &gc_candidates);
-			__set_bit(UNIX_GC_CANDIDATE, &u->gc_flags);
-			__set_bit(UNIX_GC_MAYBE_CYCLE, &u->gc_flags);
+			BUG_ON(inflight_refs < 1);
+			BUG_ON(total_refs < inflight_refs);
+			if (total_refs == inflight_refs) {
+		#else
+			struct sock *sk = &u->sk;
+			total_refs = file_count(sk->sk_socket->file);
 
-			if (sk->sk_state == TCP_LISTEN) {
-				unix_state_lock_nested(sk, U_LOCK_GC_LISTENER);
-				unix_state_unlock(sk);
-			}
+			BUG_ON(!u->inflight);
+			BUG_ON(total_refs < u->inflight);
+			if (total_refs == u->inflight) {
+		#endif
+				list_move_tail(&u->link, &gc_candidates);
+				__set_bit(UNIX_GC_CANDIDATE, &u->gc_flags);
+				__set_bit(UNIX_GC_MAYBE_CYCLE, &u->gc_flags);
+
+				#ifndef CONFIG_IS_M32
+					if (sk->sk_state == TCP_LISTEN) {
+						unix_state_lock_nested(sk, U_LOCK_GC_LISTENER);
+						unix_state_unlock(sk);
+					}
+				#endif
 		}
 	}
 
@@ -289,8 +312,12 @@ void unix_gc(void)
 
 		/* Move cursor to after the current position. */
 		list_move(&cursor, &u->link);
-
+		
+		#ifdef CONFIG_IS_M32
+		if (atomic_long_read(&u->inflight) > 0) {
+		#else
 		if (u->inflight) {
+		#endif
 			list_move_tail(&u->link, &not_cycle_list);
 			__clear_bit(UNIX_GC_MAYBE_CYCLE, &u->gc_flags);
 			scan_children(&u->sk, inc_inflight_move_tail, NULL);
