@@ -812,13 +812,13 @@ static struct sock *unix_create1(struct net *net, struct socket *sock, int kern)
 	sk->sk_max_ack_backlog	= READ_ONCE(net->unx.sysctl_max_dgram_qlen);
 	sk->sk_destruct		= unix_sock_destructor;
 	u = unix_sk(sk);
-	#ifndef CONFIG_IS_M32
+	#ifndef CONFIG_IS_M32_OR_F22
 	u->inflight = 0;
 	#endif
 	u->path.dentry = NULL;
 	u->path.mnt = NULL;
 	spin_lock_init(&u->lock);
-	#ifdef CONFIG_IS_M32
+	#ifdef CONFIG_IS_M32_OR_F22
 	atomic_long_set(&u->inflight, 0);
 	#endif
 	INIT_LIST_HEAD(&u->link);

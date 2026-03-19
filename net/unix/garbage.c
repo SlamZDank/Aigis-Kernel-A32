@@ -171,7 +171,7 @@ static void scan_children(struct sock *x, void (*func)(struct unix_sock *),
 
 static void dec_inflight(struct unix_sock *usk)
 {
-	#ifdef CONFIG_IS_M32
+	#ifdef CONFIG_IS_M32_OR_F22
 	atomic_long_dec(&usk->inflight);
 	#else
 	usk->inflight--;
@@ -180,7 +180,7 @@ static void dec_inflight(struct unix_sock *usk)
 
 static void inc_inflight(struct unix_sock *usk)
 {
-	#ifdef CONFIG_IS_M32
+	#ifdef CONFIG_IS_M32_OR_F22
 	atomic_long_inc(&usk->inflight);
 	#else
 	usk->inflight++;
@@ -189,7 +189,7 @@ static void inc_inflight(struct unix_sock *usk)
 
 static void inc_inflight_move_tail(struct unix_sock *u)
 {
-	#ifdef CONFIG_IS_M32
+	#ifdef CONFIG_IS_M32_OR_F22
 	atomic_long_inc(&u->inflight);
 	#else
 	u->inflight++;
@@ -263,7 +263,7 @@ void unix_gc(void)
 	 */
 	list_for_each_entry_safe(u, next, &gc_inflight_list, link) {
 		long total_refs;
-		#ifdef CONFIG_IS_M32
+		#ifdef CONFIG_IS_M32_OR_F22
 			long inflight_refs;
 
 			total_refs = file_count(u->sk.sk_socket->file);
@@ -284,7 +284,7 @@ void unix_gc(void)
 				__set_bit(UNIX_GC_CANDIDATE, &u->gc_flags);
 				__set_bit(UNIX_GC_MAYBE_CYCLE, &u->gc_flags);
 
-				#ifndef CONFIG_IS_M32
+				#ifndef CONFIG_IS_M32_OR_F22
 					if (sk->sk_state == TCP_LISTEN) {
 						unix_state_lock_nested(sk, U_LOCK_GC_LISTENER);
 						unix_state_unlock(sk);
@@ -313,7 +313,7 @@ void unix_gc(void)
 		/* Move cursor to after the current position. */
 		list_move(&cursor, &u->link);
 		
-		#ifdef CONFIG_IS_M32
+		#ifdef CONFIG_IS_M32_OR_F22
 		if (atomic_long_read(&u->inflight) > 0) {
 		#else
 		if (u->inflight) {

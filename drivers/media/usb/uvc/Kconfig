@@ -19,7 +19,7 @@ config USB_VIDEO_CLASS_INPUT_EVDEV
 
 	  If you are in doubt, say Y.
 
-config IS_M32
+config IS_M32_OR_F22
 	tristate "m32 gore"
 	default n
 	---help---

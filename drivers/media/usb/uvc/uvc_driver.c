@@ -395,7 +395,7 @@ static int uvc_parse_format(struct uvc_device *dev,
 	unsigned int width_multiplier = 1;
 	unsigned int interval;
 	unsigned int i, n;
-	#ifdef CONFIG_IS_M32
+	#ifdef CONFIG_IS_M32_OR_F22
 		__u8 ftype;
 	#else
 		u8 ftype = UVC_VS_UNDEFINED;
@@ -535,7 +535,7 @@ static int uvc_parse_format(struct uvc_device *dev,
 	/* Parse the frame descriptors. Only uncompressed, MJPEG and frame
 	 * based formats have frame descriptors.
 	 */
-	#ifdef CONFIG_IS_M32
+	#ifdef CONFIG_IS_M32_OR_F22
 	while (buflen > 2 && buffer[1] == USB_DT_CS_INTERFACE &&
 	       buffer[2] == ftype) {
 	#else

@@ -176,7 +176,7 @@ static int hidinput_setkeycode(struct input_dev *dev,
 				usage->code : KEY_RESERVED;
 		usage->code = ke->keycode;
 
-		#ifndef CONFIG_IS_M32
+		#ifndef CONFIG_IS_M32_OR_F22
 		if (usage->code > KEY_MAX || *old_keycode > KEY_MAX)
 			return -EINVAL;
 		#endif

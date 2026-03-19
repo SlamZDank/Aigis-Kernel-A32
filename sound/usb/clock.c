@@ -220,7 +220,7 @@ static int __uac_clock_find_source(struct snd_usb_audio *chip,
 			return -EINVAL;
 		}
 
-		#ifndef CONFIG_IS_M32
+		#ifndef CONFIG_IS_M32_OR_F22
 			if ((size_t)&selector->baCSourceID[ret - 1] >=
 					(size_t)(chip->ctrl_intf->extra + chip->ctrl_intf->extralen)) {
 				usb_audio_err(chip,
@@ -242,7 +242,7 @@ static int __uac_clock_find_source(struct snd_usb_audio *chip,
 			if (i == cur)
 				continue;
 
-			#ifndef CONFIG_IS_M32
+			#ifndef CONFIG_IS_M32_OR_F22
 				if ((size_t)&selector->baCSourceID[i - 1] >=
 						(size_t)(chip->ctrl_intf->extra + chip->ctrl_intf->extralen)) {
 					usb_audio_err(chip,

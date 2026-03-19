@@ -26,11 +26,12 @@ export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 make -C $(pwd) O=$(pwd)/out clean -j$(nproc) && make -C $(pwd) O=$(pwd)/out mrproper -j$(nproc)
 clear
  
-read -p "`echo -e 'thanks for building slmkernel \ntell what device you wanna build for 💩💩 \nsupported devices: a22, a32, m32(experimental)  '`" choice
+read -p "`echo -e 'thanks for building slmkernel \ntell what device you wanna build for 💩💩 \nsupported devices: a22, a32, m32(experimental), f22(experimental)  '`" choice
 case "$choice" in 
   a22|A22 ) export DEVICE="a22";;
   a32|A32 ) export DEVICE="a32";;
   m32|M32 ) export DEVICE="m32";;
+  f22|F22 ) export DEVICE="f22";;
   * ) echo "u made a typo or $choice not supported yet srry 💩" && exit;;
 esac
 

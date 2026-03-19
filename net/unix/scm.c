@@ -51,7 +51,7 @@ void unix_inflight(struct user_struct *user, struct file *fp)
 	if (s) {
 		struct unix_sock *u = unix_sk(s);
 
-		#ifdef CONFIG_IS_M32
+		#ifdef CONFIG_IS_M32_OR_F22
 		if (atomic_long_inc_return(&u->inflight) == 1) {
 		#else
 		if (!u->inflight) {
@@ -61,7 +61,7 @@ void unix_inflight(struct user_struct *user, struct file *fp)
 		} else {
 			BUG_ON(list_empty(&u->link));
 		}
-		#ifndef CONFIG_IS_M32
+		#ifndef CONFIG_IS_M32_OR_F22
 		u->inflight++;
 		#endif
 		/* Paired with READ_ONCE() in wait_for_unix_gc() */
@@ -80,7 +80,7 @@ void unix_notinflight(struct user_struct *user, struct file *fp)
 	if (s) {
 		struct unix_sock *u = unix_sk(s);
 
-		#ifdef CONFIG_IS_M32
+		#ifdef CONFIG_IS_M32_OR_F22
 			BUG_ON(!atomic_long_read(&u->inflight));
 			BUG_ON(list_empty(&u->link));
 

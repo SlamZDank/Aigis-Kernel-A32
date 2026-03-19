@@ -175,8 +175,8 @@ config IS_22
 	help
 	  import a code from a22 source
 
-config IS_M32
-	tristate "m32 fix smth in code"
+config IS_M32_OR_F22
+	tristate "m32/f22 fix smth in code"
 	default n
 	help
 	  import a code from m32 source
