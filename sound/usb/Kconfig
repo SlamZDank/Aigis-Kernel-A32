@@ -175,6 +175,12 @@ config IS_22
 	help
 	  import a code from a22 source
 
+config IS_M32
+	tristate "m32 fix smth in code"
+	default n
+	help
+	  import a code from m32 source
+
 source "sound/usb/line6/Kconfig"
 
 endif	# SND_USB

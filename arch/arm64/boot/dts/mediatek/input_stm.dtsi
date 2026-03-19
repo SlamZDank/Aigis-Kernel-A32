@@ -24,7 +24,7 @@
 		sec,irq_gpio = <SEC_GPIO_REF(AP,pio,10) 0>;
 		
 		/* This part is for firmware */
-		sec,project_name = "a32", "a32";
+		sec,project_name = "a32", "m32";
 		sec,bringup = <0>;
 	};
 };

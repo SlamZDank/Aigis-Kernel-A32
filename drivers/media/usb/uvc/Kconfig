@@ -18,3 +18,9 @@ config USB_VIDEO_CLASS_INPUT_EVDEV
 	  to report button events.
 
 	  If you are in doubt, say Y.
+
+config IS_M32
+	tristate "m32 gore"
+	default n
+	---help---
+	  fix smth

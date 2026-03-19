@@ -176,8 +176,10 @@ static int hidinput_setkeycode(struct input_dev *dev,
 				usage->code : KEY_RESERVED;
 		usage->code = ke->keycode;
 
+		#ifndef CONFIG_IS_M32
 		if (usage->code > KEY_MAX || *old_keycode > KEY_MAX)
 			return -EINVAL;
+		#endif
 
 		clear_bit(*old_keycode, dev->keybit);
 		set_bit(usage->code, dev->keybit);

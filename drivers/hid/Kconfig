@@ -1054,6 +1054,12 @@ config IS_22
 	---help---
 	kang 1 thing from a22
 
+config IS_M32
+	tristate "gore m32"
+	default n
+	---help---
+	kang 1 thing from m32
+
 endmenu
 
 endif # HID
