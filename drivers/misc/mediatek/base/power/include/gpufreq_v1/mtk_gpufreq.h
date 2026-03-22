@@ -17,6 +17,9 @@
 #if defined(CONFIG_MACH_MT6885)
 #include "mt6885/mtk_gpufreq_plat.h"
 
+#if defined(CONFIG_MACH_MT6768)
+#include "mt6768/mtk_gpufreq_plat.h"
+
 #elif defined(CONFIG_MACH_MT6893)
 #include "mt6893/mtk_gpufreq_plat.h"
 
