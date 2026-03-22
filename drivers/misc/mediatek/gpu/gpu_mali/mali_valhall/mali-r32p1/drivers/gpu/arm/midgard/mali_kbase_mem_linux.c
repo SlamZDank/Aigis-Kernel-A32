@@ -55,7 +55,7 @@ static DEFINE_MUTEX(ion_config_lock);
 
 #if defined(CONFIG_MTK_TRUSTED_MEMORY_SUBSYSTEM) && defined(CONFIG_MTK_GZ_KREE)
 #include <trusted_mem_api.h>
-#include <mtk/ion_sec_heap.h>
+#include <ion_sec_heap.h>
 #endif
 
 #if ((KERNEL_VERSION(5, 3, 0) <= LINUX_VERSION_CODE) || \
