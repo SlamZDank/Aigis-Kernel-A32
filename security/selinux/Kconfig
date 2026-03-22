@@ -22,6 +22,12 @@ config SECURITY_SELINUX_BOOTPARAM
 
 	  If you are unsure how to answer this question, answer N.
 
+config SECURITY_SELINUX_BOOTPARAM_VALUE
+    int "NSA SELinux boot parameter default value"
+    depends on SECURITY_SELINUX_BOOTPARAM
+    range 0 1
+    default 1
+
 config SECURITY_SELINUX_DISABLE
 	bool "NSA SELinux runtime disable"
 	depends on SECURITY_SELINUX
