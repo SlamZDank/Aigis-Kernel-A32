@@ -1,0 +1,12 @@
+--- kernel/kallsyms.c
++++ kernel/kallsyms.c
+@@ -25,6 +25,9 @@
+ #include <linux/slab.h>
+ #include <linux/filter.h>
+ #include <linux/compiler.h>
++#ifdef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
++#include <linux/susfs_def.h>
++#endif // #ifdef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
+ 
+ #include <asm/sections.h>
+ 

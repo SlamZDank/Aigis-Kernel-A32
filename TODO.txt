@@ -1,0 +1,84 @@
+  I ❯ patch -p1 < susfs_patch_to_4.14.patch
+patching file fs/Makefile
+Hunk #1 succeeded at 15 (offset 1 line).
+patching file fs/namei.c
+Hunk #1 FAILED at 39.
+Hunk #2 succeeded at 48 (offset 2 lines).
+Hunk #3 succeeded at 535 (offset 2 lines).
+Hunk #4 succeeded at 564 (offset 2 lines).
+Hunk #5 succeeded at 1670 (offset 28 lines).
+Hunk #6 succeeded at 1703 (offset 28 lines).
+Hunk #7 succeeded at 1711 (offset 28 lines).
+Hunk #8 succeeded at 1746 (offset 28 lines).
+Hunk #9 succeeded at 1760 (offset 28 lines).
+Hunk #10 succeeded at 1816 (offset 28 lines).
+Hunk #11 succeeded at 1857 (offset 28 lines).
+Hunk #12 succeeded at 1868 (offset 28 lines).
+Hunk #13 succeeded at 1880 (offset 28 lines).
+Hunk #14 succeeded at 1900 (offset 28 lines).
+Hunk #15 succeeded at 2035 (offset 28 lines).
+Hunk #16 succeeded at 2301 (offset 28 lines).
+Hunk #17 succeeded at 2319 (offset 28 lines).
+Hunk #18 succeeded at 2518 (offset 28 lines).
+Hunk #19 succeeded at 3411 (offset 48 lines).
+Hunk #20 succeeded at 3569 (offset 48 lines).
+Hunk #21 succeeded at 5079 (offset 69 lines).
+Hunk #22 succeeded at 5103 (offset 69 lines).
+Hunk #23 succeeded at 5130 (offset 69 lines).
+1 out of 23 hunks FAILED -- saving rejects to file fs/namei.c.rej
+patching file fs/namespace.c
+Hunk #1 FAILED at 27.
+Hunk #2 succeeded at 312 (offset 192 lines).
+Hunk #3 succeeded at 345 (offset 192 lines).
+Hunk #4 succeeded at 381 (offset 192 lines).
+Hunk #5 succeeded at 443 with fuzz 1 (offset 196 lines).
+Hunk #6 succeeded at 1487 (offset 292 lines).
+Hunk #7 succeeded at 1591 with fuzz 2 (offset 328 lines).
+Hunk #8 succeeded at 1686 with fuzz 1 (offset 362 lines).
+Hunk #9 FAILED at 3272.
+Hunk #10 succeeded at 4545 (offset 697 lines).
+2 out of 10 hunks FAILED -- saving rejects to file fs/namespace.c.rej
+patching file fs/notify/fdinfo.c
+patching file fs/open.c
+Hunk #1 succeeded at 1078 (offset 1 line).
+Hunk #2 succeeded at 1100 (offset 1 line).
+patching file fs/proc/base.c
+Hunk #1 FAILED at 95.
+Hunk #2 succeeded at 913 (offset 127 lines).
+Hunk #3 succeeded at 932 (offset 127 lines).
+Hunk #4 succeeded at 1746 (offset -69 lines).
+Hunk #5 succeeded at 1759 (offset -69 lines).
+Hunk #6 succeeded at 2281 (offset -69 lines).
+Hunk #7 succeeded at 2336 (offset -69 lines).
+1 out of 7 hunks FAILED -- saving rejects to file fs/proc/base.c.rej
+patching file fs/proc/cmdline.c
+patching file fs/proc/fd.c
+patching file fs/proc/task_mmu.c
+Hunk #1 FAILED at 20.
+Hunk #2 succeeded at 361 with fuzz 2 (offset 12 lines).
+Hunk #3 succeeded at 379 (offset 12 lines).
+Hunk #4 succeeded at 427 (offset 12 lines).
+Hunk #5 FAILED at 933.
+Hunk #6 FAILED at 942.
+Hunk #7 FAILED at 978.
+Hunk #8 succeeded at 1684 (offset 66 lines).
+Hunk #9 succeeded at 1744 (offset 66 lines).
+4 out of 9 hunks FAILED -- saving rejects to file fs/proc/task_mmu.c.rej
+patching file fs/proc_namespace.c
+patching file fs/readdir.c
+patching file fs/stat.c
+patching file fs/statfs.c
+patching file fs/susfs.c
+patching file include/linux/susfs.h
+patching file include/linux/susfs_def.h
+patching file kernel/kallsyms.c
+Hunk #1 FAILED at 25.
+Hunk #2 succeeded at 622 (offset -24 lines).
+1 out of 2 hunks FAILED -- saving rejects to file kernel/kallsyms.c.rej
+patching file kernel/sys.c
+Hunk #1 FAILED at 1182.
+1 out of 1 hunk FAILED -- saving rejects to file kernel/sys.c.rej
+patching file security/selinux/avc.c
+Hunk #1 succeeded at 169 (offset 5 lines).
+Hunk #2 succeeded at 197 (offset 5 lines).
+Hunk #3 succeeded at 214 (offset 5 lines).
