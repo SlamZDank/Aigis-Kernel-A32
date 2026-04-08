@@ -4,7 +4,7 @@
 # goodluck building sir
 # gore ubuntu 25.10 error fix: sudo ln -s /lib/x86_64-linux-gnu/libxml2.so.16 /lib/x86_64-linux-gnu/libxml2.so.2
 #edit the zyc clang directory name accordingly to ur toolchain.
-export TC=/home/vigus/zyc-clang
+export TC=$(pwd)/zyc-clang
 
 export CROSS_COMPILE=$TC/bin/aarch64-linux-gnu-
 export LD=$TC/bin/ld.lld
@@ -27,11 +27,3 @@ make -C $(pwd) O=$(pwd)/out clean -j$(nproc) && make -C $(pwd) O=$(pwd)/out mrpr
 make -C $(pwd) O=$(pwd)/out -j$(nproc) a32_vigus_defconfig
 clear
 make -s -C $(pwd) O=$(pwd)/out KCFLAGS=' -w -pipe -O3' CONFIG_SECTION_MISMATCH_WARN_ONLY=y -j$(nproc)
-
-#only for me delete if u want 💩💩💩💩
-read -p "copy to kernal directory? (are u vigus?) y/n   " choice
-case "$choice" in 
-  y|Y ) cp out/arch/arm64/boot/Image ~/Downloads/buildkernal/Image;;
-  n|N ) echo "k";;
-  * ) echo "nvm";;
-esac
