@@ -4,7 +4,7 @@
 # goodluck building sir
 # gore ubuntu 25.10 error fix: sudo ln -s /lib/x86_64-linux-gnu/libxml2.so.16 /lib/x86_64-linux-gnu/libxml2.so.2
 #edit the zyc clang directory name accordingly to ur toolchain.
-export TC=/home/vigus/zyc-clang
+export TC=$(pwd)/toolchain/zyc-clang
 
 export CROSS_COMPILE=$TC/bin/aarch64-linux-gnu-
 export LD=$TC/bin/ld.lld
@@ -46,3 +46,5 @@ case "$choice" in
   n|N ) echo "k";;
   * ) echo "nvm";;
 esac
+
+# you can apply kpm afterwards using kpimg and kptools if i remember
