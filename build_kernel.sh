@@ -3,8 +3,9 @@
 #u can use zyc clang 14 if u're unsure what toolchain to use. https://github.com/ZyCromerZ/Clang/releases/tag/14.0.6-20250704-release
 # goodluck building sir
 # gore ubuntu 25.10 error fix: sudo ln -s /lib/x86_64-linux-gnu/libxml2.so.16 /lib/x86_64-linux-gnu/libxml2.so.2
+# or install libxml2-legacy if you are on arch linux
 #edit the zyc clang directory name accordingly to ur toolchain.
-export TC=$(pwd)/zyc-clang
+export TC=$(pwd)/toolchain/zyc-clang
 
 export CROSS_COMPILE=$TC/bin/aarch64-linux-gnu-
 export LD=$TC/bin/ld.lld
