@@ -27,6 +27,7 @@ struct seccomp_filter;
  */
 struct seccomp {
 	int mode;
+	atomic_t filter_count;
 	struct seccomp_filter *filter;
 };
 
