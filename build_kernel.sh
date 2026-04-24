@@ -25,5 +25,5 @@ export KCPPFLAGS=' -O3'
 export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 
 make -C $(pwd) O=$(pwd)/out clean -j$(nproc) && make -C $(pwd) O=$(pwd)/out mrproper -j$(nproc)
-make -C $(pwd) O=$(pwd)/out -j$(nproc) a32_vigus_defconfig
+make -C $(pwd) O=$(pwd)/out -j$(nproc) a32_slamzdank_defconfig
 make -s -C $(pwd) O=$(pwd)/out KCFLAGS=' -w -pipe -O3' CONFIG_SECTION_MISMATCH_WARN_ONLY=y -j$(nproc)
