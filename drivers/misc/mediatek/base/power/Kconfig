@@ -128,3 +128,15 @@ config MTK_QOS_V2
 	  It supports BW prediction, BW bound detection, and BW limiter.
 	  It is also mapped with sspm qos v2.
 	  If unsure, say N.
+
+config SLNNAPCAZ
+	bool "sl mkernal kang protection V-1"
+	default n
+	---help---
+	  just so we can know if someone builds using this source i can check if they kanged my source
+
+config SLM_OC_GPU
+	bool "gpu overclock"
+	default n
+	---help---
+	  oc mali g52 mc2, increase idx table & increase voltage

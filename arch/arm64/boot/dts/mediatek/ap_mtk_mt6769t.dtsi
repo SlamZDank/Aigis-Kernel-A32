@@ -12,3 +12,5 @@
 #include "../../mediatek/k69v1_64_titan_marmot/gpio02_m32.dtsi"
 /* also include f22 */
 #include "../../mediatek/k69v1_64_titan_buffalo/gpio02_f22.dtsi"
+/* also include m22 */
+#include "../../mediatek/k69v1_64_titan_buffalo/gpio02_m22.dtsi"

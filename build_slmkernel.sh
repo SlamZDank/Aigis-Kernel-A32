@@ -15,29 +15,43 @@ export STRIP=$TC/bin/llvm-strip
 export OBJDUMP=$TC/bin/llvm-objdump
 export READELF=$TC/bin/llvm-readelf
 export CC=$TC/bin/clang
-export CROSS_COMPILE_ARM32=$TC/bin/arm-linux-gnueabi-
 export ARCH=arm64
-export ANDROID_MAJOR_VERSION=r
 
 export KCFLAGS=' -w -pipe -O3'
 export KCPPFLAGS=' -O3'
 export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 
+#setup configs directory
+export CFGDIR=arch/arm64/configs
+
+rm -rf $CFGDIR/compiled_defconfig
 make -C $(pwd) O=$(pwd)/out clean -j$(nproc) && make -C $(pwd) O=$(pwd)/out mrproper -j$(nproc)
 clear
  
-read -p "`echo -e 'thanks for building slmkernel \ntell what device you wanna build for 💩💩 \nsupported devices: a22, a32, m32(experimental), f22(experimental)  '`" choice
+read -p "`echo -e 'thanks for building slmkernel \ntell what device you wanna build for 💩💩 \nsupported devices: a22, a32, m32(experimental), f22(experimental), m22(very experimental)  '`" choice
 case "$choice" in 
   a22|A22 ) export DEVICE="a22";;
   a32|A32 ) export DEVICE="a32";;
   m32|M32 ) export DEVICE="m32";;
   f22|F22 ) export DEVICE="f22";;
+  m22|M22 ) export DEVICE="m22";;
   * ) echo "u made a typo or $choice not supported yet srry 💩" && exit;;
 esac
 
-make -C $(pwd) O=$(pwd)/out -j$(nproc) "$DEVICE"_slm_defconfig
+#edit perf.config to battery.config to disable perf tweaks, dont use them at the same time!
+#add $CFGDIR/ksu.config at the end before ">" for ksu integration(optional)
+#example: build m22 battery life oriented karnal with ksu: $CFGDIR/mt6768_slm_defconfig $CFGDIR/"$DEVICE".config $CFGDIR/battery.config $CFGDIR/ksu.config
+cat $CFGDIR/mt6768_slm_defconfig $CFGDIR/"$DEVICE".config $CFGDIR/perf.config > $CFGDIR/compiled_defconfig
+
+#selinux control it by here
+echo "
+# CONFIG_ALWAYS_ENFORCE is not set
+CONFIG_ALWAYS_PERMISSIVE=y
+" >> $CFGDIR/compiled_defconfig
+
+make -C $(pwd) O=$(pwd)/out -j$(nproc) compiled_defconfig
 make -s -C $(pwd) O=$(pwd)/out -j$(nproc)
-echo "$DEVICE"
+echo "u (tried to) built for: $DEVICE"
 
 #only for me delete if u want 💩💩💩💩
 read -p "copy to kernal directory? (are u vigus?) y/n   " choice
