@@ -421,7 +421,11 @@ static unsigned int FY_G75Tbl[NR_FREQ * NR_MT_CPU_DVFS][ARRAY_COL_SIZE] = {
 	/* Freq, Vproc, post_div, clk_div */
 
 	/* L */
+#ifdef CONFIG_SLM_OC_CCI
 	{ 1800, 90, 1, 1 },
+#else
+	{ 1800, 81, 1, 1 },
+#endif
 	{ 1625, 69, 2, 1 },
 	{ 1500, 63, 2, 1 },
 	{ 1450, 61, 2, 1 },
@@ -441,11 +445,19 @@ static unsigned int FY_G75Tbl[NR_FREQ * NR_MT_CPU_DVFS][ARRAY_COL_SIZE] = {
 
 
     /* B */
-	{ 2000, 94, 1, 1 },
-	{ 1950, 92, 1, 1 },
-	{ 1900, 90, 1, 1 },
-	{ 1850, 88, 1, 1 },
-	{ 1800, 85, 1, 1 },
+#ifdef CONFIG_SLM_UV
+    { 2000, 92, 1, 1 },
+    { 1950, 90, 1, 1 },
+    { 1900, 88, 1, 1 },
+    { 1850, 86, 1, 1 },
+    { 1800, 83, 1, 1 },
+#else
+    { 2000, 94, 1, 1 },
+    { 1950, 92, 1, 1 },
+    { 1900, 90, 1, 1 },
+    { 1850, 88, 1, 1 },
+    { 1800, 85, 1, 1 },
+#endif
 	{ 1710, 80, 1, 1 },
 	{ 1621, 75, 1, 1 },
 	{ 1532, 69, 2, 1 },
@@ -460,7 +472,11 @@ static unsigned int FY_G75Tbl[NR_FREQ * NR_MT_CPU_DVFS][ARRAY_COL_SIZE] = {
 
 
 	/* CCI */
-	{ 1600, 90, 2, 1 },
+#ifdef CONFIG_SLM_OC_CCI
+	{ 1460, 90, 2, 1 },
+#else
+	{ 1277, 81, 2, 1 },
+#endif
 	{ 1120, 64, 2, 1 },
 	{ 1049, 60, 2, 1 },
 	{ 1014, 58, 2, 1 },
@@ -469,7 +485,7 @@ static unsigned int FY_G75Tbl[NR_FREQ * NR_MT_CPU_DVFS][ARRAY_COL_SIZE] = {
 	{ 856, 48, 2, 1 },
 	{ 821, 45, 2, 1 },
 	{ 768, 42, 2, 1 },
-	{ 768, 42, 2, 1 },
+	{ 733, 42, 2, 1 },
 	{ 698, 37, 2, 1 },
 	{ 663, 35, 2, 1 },
 	{ 628, 33, 4, 1 },

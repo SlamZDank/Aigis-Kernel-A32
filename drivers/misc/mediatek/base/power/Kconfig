@@ -131,7 +131,7 @@ config MTK_QOS_V2
 
 config SLNNAPCAZ
 	bool "sl mkernal kang protection V-1"
-	default n
+	default y
 	---help---
 	  just so we can know if someone builds using this source i can check if they kanged my source
 
@@ -140,3 +140,15 @@ config SLM_OC_GPU
 	default n
 	---help---
 	  oc mali g52 mc2, increase idx table & increase voltage
+
+config SLM_OC_CCI
+	bool "cci overclock"
+	default n
+	---help---
+	  oc cci, increase little core voltage(cci use same rails as L core)
+
+config SLM_UV
+	bool "cpu undervolt"
+	default n
+	---help---
+	  decrease big & little core voltage for less temps and battery drain
