@@ -82,7 +82,7 @@ static int pm_callback_power_on(struct kbase_device *kbdev)
 			(void *)kbdev->dev->pm_domain);
 
 	error = pm_runtime_get_sync(kbdev->dev);
-        enable_gpu_power_control(kbdev);
+	enable_gpu_power_control(kbdev);
 
 	if (error == 1) {
 		/*

@@ -1695,8 +1695,8 @@ int kbase_gpu_munmap(struct kbase_context *kctx, struct kbase_va_region *reg)
 				/* The allocation could still have active mappings. */
 				if (user_buf->current_mapping_usage_count == 0) {
 					kbase_jd_user_buf_unmap(kctx, reg->gpu_alloc, reg,
-								(reg->flags & 
-								(KBASE_REG_CPU_WR | KBASE_REG_GPU_WR)));
+						(reg->flags &
+						(KBASE_REG_CPU_WR | KBASE_REG_GPU_WR)));
 				}
 			}
 		}
@@ -4555,8 +4555,8 @@ void kbase_trace_jit_report_gpu_mem_trace_enabled(struct kbase_context *kctx,
 
 	addr_start = reg->heap_info_gpu_addr - jit_report_gpu_mem_offset;
 
-	ptr = kbase_vmap(kctx, addr_start, KBASE_JIT_REPORT_GPU_MEM_SIZE,
-			&mapping);
+	ptr = kbase_vmap_prot(kctx, addr_start, KBASE_JIT_REPORT_GPU_MEM_SIZE,
+			KBASE_REG_CPU_RD, &mapping);
 	if (!ptr) {
 		dev_warn(kctx->kbdev->dev,
 				"%s: JIT start=0x%llx unable to map memory near end pointer %llx\n",
@@ -4631,7 +4631,7 @@ static void kbase_jd_user_buf_unpin_pages(struct kbase_mem_phy_alloc *alloc)
 	 * Refer to this function's kernel-doc comments for alternatives for
 	 * unpinning a User buffer.
 	 */
-	
+
 	if (alloc->nents && !WARN(kref_read(&alloc->kref) != 0,
 				  "must only be called on terminating an allocation")) {
 		struct page **pages = alloc->imported.user_buf.pages;
@@ -4730,7 +4730,7 @@ static int kbase_jd_user_buf_map(struct kbase_context *kctx,
 	lockdep_assert_held(&kctx->reg_lock);
 
 	err = kbase_jd_user_buf_pin_pages(kctx, reg);
-	
+
 	if (err)
 		return err;
 
@@ -5049,7 +5049,6 @@ void kbase_unmap_external_resource(struct kbase_context *kctx, struct kbase_va_r
 						kbase_reg_current_backed_size(reg),
 						kctx->as_nr);
 			}
-
 			if ((reg->flags & (KBASE_REG_CPU_WR | KBASE_REG_GPU_WR)) == 0)
 				writeable = false;
 
