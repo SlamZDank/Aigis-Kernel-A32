@@ -638,21 +638,21 @@ static int dma_buf_lock_dolock(dma_buf_lock_k_request *request)
 
 	kref_get(&resource->refcount);
 
-        error = get_unused_fd_flags(0);
-        if (error < 0)
-                return error;
+	error = get_unused_fd_flags(0);
+	if (error < 0)
+		return error;
 
-        fd = error;
+	fd = error;
 
-        file = anon_inode_getfile("dma_buf_lock", &dma_buf_lock_handle_fops, (void *)resource, 0);
+	file = anon_inode_getfile("dma_buf_lock", &dma_buf_lock_handle_fops, (void *)resource, 0);
 
-        if (IS_ERR(file)) {
-                put_unused_fd(fd);
+	if (IS_ERR(file)) {
+		put_unused_fd(fd);
 		mutex_lock(&dma_buf_lock_mutex);
 		kref_put(&resource->refcount, dma_buf_lock_dounlock);
 		kref_put(&resource->refcount, dma_buf_lock_dounlock);
 		mutex_unlock(&dma_buf_lock_mutex);
-                return PTR_ERR(file);
+		return PTR_ERR(file);
 	}
 
 	resource->exclusive = request->exclusive;

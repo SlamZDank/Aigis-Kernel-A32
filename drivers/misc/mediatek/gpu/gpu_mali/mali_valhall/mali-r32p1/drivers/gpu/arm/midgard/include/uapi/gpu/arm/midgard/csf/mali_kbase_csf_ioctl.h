@@ -44,7 +44,7 @@
  * - Add ioctl 40: kbase_ioctl_cs_queue_register_ex, this is a new
  *   queue registration call with extended format for supporting CS
  *   trace configurations with CSF trace_command.
-* - Added support for passing down the buffer descriptor VA in tiler heap init
+ * - Added support for passing down the buffer descriptor VA in tiler heap init
  * 1.18:
  * - Relax the requirement to create a mapping with BASE_MEM_MAP_TRACKING_HANDLE
  *   before allocating GPU memory for the context.

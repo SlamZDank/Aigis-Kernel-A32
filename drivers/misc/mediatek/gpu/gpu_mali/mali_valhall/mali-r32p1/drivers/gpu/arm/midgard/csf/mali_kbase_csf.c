@@ -1539,7 +1539,7 @@ void kbase_csf_queue_group_terminate(struct kbase_context *kctx,
 	if (group) {
 		unsigned long flags;
 
-                /* Stop the running of the given group */
+		/* Stop the running of the given group */
 		term_queue_group(group);
 		kctx->csf.queue_groups[group_handle] = NULL;
 
@@ -1555,16 +1555,16 @@ void kbase_csf_queue_group_terminate(struct kbase_context *kctx,
 		mutex_lock(&kctx->csf.lock);
 
 		/* Clean up after the termination */
-                spin_lock_irqsave(&kctx->csf.event_lock, flags);
+		spin_lock_irqsave(&kctx->csf.event_lock, flags);
 
-                dev_dbg(kbdev->dev,
-                        "Remove any pending group fatal error from context %pK\n",
-                        (void *)group->kctx);
+		dev_dbg(kbdev->dev,
+			"Remove any pending group fatal error from context %pK\n",
+			(void *)group->kctx);
 
-                list_del_init(&group->error_tiler_oom.link);
-                list_del_init(&group->error_timeout.link);
-                list_del_init(&group->error_fatal.link);
-                spin_unlock_irqrestore(&kctx->csf.event_lock, flags);
+		list_del_init(&group->error_tiler_oom.link);
+		list_del_init(&group->error_timeout.link);
+		list_del_init(&group->error_fatal.link);
+		spin_unlock_irqrestore(&kctx->csf.event_lock, flags);
 	}
 
 	mutex_unlock(&kctx->csf.lock);

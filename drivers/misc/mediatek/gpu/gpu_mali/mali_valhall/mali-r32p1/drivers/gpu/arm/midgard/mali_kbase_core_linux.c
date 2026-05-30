@@ -115,7 +115,7 @@
 #include "platform/mtk_platform_common.h"
 #include <mtk_gpufreq.h>
 
-#if defined(MTK_GPU_BM_2)
+#if defined(MTK_GPU_BM_2) && !defined(GPU_BM_PORTING)
 #include <gpu_bm.h>
 #if IS_ENABLED(CONFIG_MTK_TINYSYS_SSPM_SUPPORT)
 #include <sspm_reservedmem_define.h>
@@ -172,7 +172,7 @@ static mali_kbase_capability_def kbase_caps_table[MALI_KBASE_NUM_CAPS] = {
 #endif
 };
 
-#if defined(MTK_GPU_BM_2)
+#if defined(MTK_GPU_BM_2) && !defined(GPU_BM_PORTING)
 static void get_rec_addr(void)
 {
 #if IS_ENABLED(CONFIG_MTK_TINYSYS_SSPM_SUPPORT)
@@ -5238,7 +5238,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 
 	// *** MTK *** : make sure gpufreq driver is ready
 	pr_info("%s start\n", __func__);
-#if !defined(CONFIG_MACH_MT6768)
+#if !defined(CONFIG_MACH_MT6768) && !defined(CONFIG_MACH_MT6785)
 	if (mt_gpufreq_not_ready()) {
 		pr_info("gpufreq driver is not ready: %d\n", -EPROBE_DEFER);
 		return -EPROBE_DEFER;
@@ -5255,7 +5255,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	kbdev->dev = &pdev->dev;
 	dev_set_drvdata(kbdev->dev, kbdev);
 
-#if defined(CONFIG_MACH_MT6768)
+#if defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT6785)
 	err |= mtk_common_device_init(kbdev);
 	err |= mtk_platform_device_init(kbdev);
 #endif
@@ -5275,7 +5275,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 #if IS_ENABLED(CONFIG_PROC_FS)
 		mtk_common_procfs_init();
 #endif
-#if defined(MTK_GPU_BM_2)
+#if defined(MTK_GPU_BM_2) && !defined(GPU_BM_PORTING)
 		mtk_bandwith_resource_init(kbdev);
 #endif
 		dev_info(kbdev->dev,

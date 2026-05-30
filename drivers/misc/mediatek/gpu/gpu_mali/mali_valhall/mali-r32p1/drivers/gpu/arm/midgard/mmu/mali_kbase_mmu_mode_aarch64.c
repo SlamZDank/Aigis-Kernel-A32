@@ -201,10 +201,10 @@ static void entry_set_pte(u64 *pgd, u64 vpfn, phys_addr_t phy)
 
 static void entries_invalidate(u64 *entry, u32 count)
 {
-    u32 i;
-    
-    for (i = 0; i < count; i++)
-        page_table_entry_set(entry + i, ENTRY_IS_INVAL);
+	u32 i;
+
+	for (i = 0; i < count; i++)
+		page_table_entry_set(entry + i, ENTRY_IS_INVAL);
 }
 
 static struct kbase_mmu_mode const aarch64_mode = {

@@ -73,7 +73,7 @@ ccflags-y += -I$(src)/include
 subdir-ccflags-y += -I$(src)/include
 
 # Driver version string which is returned to userspace via an ioctl
-MALI_RELEASE_NAME ?= '"r32p1-01eac0"'
+MALI_RELEASE_NAME ?= '"r32p1-00bet5"'
 # Set up defaults if not defined by build system
 ifeq ($(CONFIG_MALI_DEBUG), y)
     MALI_UNIT_TEST = 1
@@ -92,7 +92,6 @@ MALI_PLATFORM_DIR := $(shell echo $(CONFIG_MALI_PLATFORM_NAME))
 ifeq ($(CONFIG_MTK_TRUSTED_MEMORY_SUBSYSTEM), y)
     include $(srctree)/drivers/misc/mediatek/trusted_mem/Makefile.include
     ccflags-y += -I$(srctree)/drivers/staging/android/ion
-    ccflags-y += -I$(srctree)/drivers/staging/android/ion/mtk
 endif
 
 ifeq ($(CONFIG_MALI_CSF_SUPPORT),y)
