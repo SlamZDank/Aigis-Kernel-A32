@@ -307,8 +307,8 @@ static int kbase_kcpu_jit_allocate_process(
 		 * Write the address of the JIT allocation to the user provided
 		 * GPU allocation.
 		 */
-		ptr = kbase_vmap(kctx, info->gpu_alloc_addr, sizeof(*ptr),
-				&mapping);
+		ptr = kbase_vmap_prot(kctx, info->gpu_alloc_addr, sizeof(*ptr),
+				KBASE_REG_CPU_WR, &mapping);
 		if (!ptr) {
 			ret = -ENOMEM;
 			goto fail;
@@ -596,9 +596,11 @@ static int kbase_csf_queue_group_suspend_prepare(
 {
 	struct kbase_context *const kctx = kcpu_queue->kctx;
 	struct kbase_suspend_copy_buffer *sus_buf = NULL;
+	const u32 csg_suspend_buf_size =
+		kctx->kbdev->csf.global_iface.groups[0].suspend_size;
 	u64 addr = suspend_buf->buffer;
 	u64 page_addr = addr & PAGE_MASK;
-	u64 end_addr = addr + suspend_buf->size - 1;
+	u64 end_addr = addr + csg_suspend_buf_size - 1;
 	u64 last_page_addr = end_addr & PAGE_MASK;
 	int nr_pages = (last_page_addr - page_addr) / PAGE_SIZE + 1;
 	int pinned_pages = 0, ret = 0;
@@ -606,8 +608,7 @@ static int kbase_csf_queue_group_suspend_prepare(
 
 	lockdep_assert_held(&kctx->csf.kcpu_queues.lock);
 
-	if (suspend_buf->size <
-			kctx->kbdev->csf.global_iface.groups[0].suspend_size)
+	if (suspend_buf->size < csg_suspend_buf_size)
 		return -EINVAL;
 
 	ret = kbase_csf_queue_group_handle_is_valid(kctx,
@@ -619,7 +620,7 @@ static int kbase_csf_queue_group_suspend_prepare(
 	if (!sus_buf)
 		return -ENOMEM;
 
-	sus_buf->size = suspend_buf->size;
+	sus_buf->size = csg_suspend_buf_size;
 	sus_buf->nr_pages = nr_pages;
 	sus_buf->offset = addr & ~PAGE_MASK;
 
@@ -1873,7 +1874,7 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 			}
 			break;
 		}
-		case BASE_KCPU_COMMAND_TYPE_JIT_FREE:
+		case BASE_KCPU_COMMAND_TYPE_JIT_FREE: {
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_JIT_FREE_START(
 				kbdev, queue);
 
@@ -1884,21 +1885,24 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_JIT_FREE_END(
 				kbdev, queue);
 			break;
+		}
 		case BASE_KCPU_COMMAND_TYPE_GROUP_SUSPEND: {
 			struct kbase_suspend_copy_buffer *sus_buf =
 					cmd->info.suspend_buf_copy.sus_buf;
 
-			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_GROUP_SUSPEND_START(
-				kbdev, queue);
+			if (!ignore_waits) {
+				KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_GROUP_SUSPEND_START(
+					kbdev, queue);
 
-			status = kbase_csf_queue_group_suspend_process(
-					queue->kctx, sus_buf,
-					cmd->info.suspend_buf_copy.group_handle);
-			if (status)
-				queue->has_error = true;
+				status = kbase_csf_queue_group_suspend_process(
+						queue->kctx, sus_buf,
+						cmd->info.suspend_buf_copy.group_handle);
+				if (status)
+					queue->has_error = true;
 
-			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_GROUP_SUSPEND_END(
-				kbdev, queue, status);
+				KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_GROUP_SUSPEND_END(
+					kbdev, queue, status);
+			}
 
 			if (!sus_buf->cpu_alloc) {
 				int i;

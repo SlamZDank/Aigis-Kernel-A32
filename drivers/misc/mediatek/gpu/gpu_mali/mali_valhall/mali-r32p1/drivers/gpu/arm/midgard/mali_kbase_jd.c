@@ -595,8 +595,8 @@ static void jd_update_jit_usage(struct kbase_jd_atom *katom)
 		else if (reg->flags & KBASE_REG_TILER_ALIGN_TOP)
 			size_to_read = sizeof(u64[COUNT]);
 
-		ptr = kbase_vmap(kctx, reg->heap_info_gpu_addr, size_to_read,
-				&mapping);
+		ptr = kbase_vmap_prot(kctx, reg->heap_info_gpu_addr, size_to_read,
+				KBASE_REG_CPU_RD, &mapping);
 
 		if (!ptr) {
 			dev_warn(kctx->kbdev->dev,
@@ -938,7 +938,7 @@ static bool jd_submit_atom(struct kbase_context *const kctx,
 
 	katom->age = kctx->age_count++;
 
-#if defined(MTK_GPU_BM_2)
+#if defined(MTK_GPU_BM_2) && !defined(GPU_BM_PORTING)
 	/* set up frame number */
 	katom->frame_nr = user_atom->frame_nr;
 #endif
@@ -1165,7 +1165,7 @@ static bool jd_submit_atom(struct kbase_context *const kctx,
 	trace_gpu_job_enqueue(kctx->id, katom->work_id,
 			kbasep_map_core_reqs_to_string(katom->core_req));
 #endif
-#if defined(MTK_GPU_BM_2)
+#if defined(MTK_GPU_BM_2) && !defined(GPU_BM_PORTING)
 	katom->work_id = atomic_inc_return(&jctx->work_id);
 #endif
 
