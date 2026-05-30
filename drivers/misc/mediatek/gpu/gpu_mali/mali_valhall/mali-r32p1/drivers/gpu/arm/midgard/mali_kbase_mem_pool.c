@@ -297,7 +297,7 @@ int kbase_mem_pool_grow(struct kbase_mem_pool *pool,
 		}
 		kbase_mem_pool_unlock(pool);
 		if (unlikely(!can_alloc_page(pool, page_owner, alloc_from_kthread)))
-					return -ENOMEM;
+			return -ENOMEM;
 
 		p = kbase_mem_alloc_page(pool);
 		if (!p) {
@@ -625,7 +625,7 @@ int kbase_mem_pool_alloc_pages(struct kbase_mem_pool *pool, size_t nr_4k_pages,
 		/* Get any remaining pages from kernel */
 		while (i != nr_4k_pages) {
 			if (unlikely(!can_alloc_page(pool, page_owner, alloc_from_kthread)))
-							goto err_rollback;
+				goto err_rollback;
 			p = kbase_mem_alloc_page(pool);
 			if (!p) {
 				if (partial_allowed)
