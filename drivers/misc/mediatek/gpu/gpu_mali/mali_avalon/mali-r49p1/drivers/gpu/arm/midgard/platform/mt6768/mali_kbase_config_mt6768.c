@@ -63,7 +63,7 @@ static int gIsDsuRequested = 0;
 spinlock_t g_dsu_request_lock;
 #endif /* CONFIG_MALI_MTK_ACP_DSU_REQ */
 
-DEFINE_MUTEX(g_mfg_lock);
+extern struct mutex g_mfg_lock;
 
 //FIXME
 static int g_curFreqID;

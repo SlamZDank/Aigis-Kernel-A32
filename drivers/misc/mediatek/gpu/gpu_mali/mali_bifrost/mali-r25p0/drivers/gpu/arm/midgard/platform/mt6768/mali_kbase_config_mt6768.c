@@ -41,7 +41,7 @@
 #define mali_pr_info(fmt, args...)		pr_info(MALI_TAG"[INFO]"fmt, ##args)
 #define mali_pr_debug(fmt, args...)		pr_debug(MALI_TAG"[DEBUG]"fmt, ##args)
 
-DEFINE_MUTEX(g_mfg_lock);
+extern struct mutex g_mfg_lock;
 
 static void *g_MFG_base;
 static int g_curFreqID;

@@ -59,6 +59,10 @@
 #include "mtk_gpu_log.h"
 #endif
 
+#include <linux/mutex.h>
+DEFINE_MUTEX(g_mfg_lock);
+EXPORT_SYMBOL_GPL(g_mfg_lock);  
+
 /**
  * ===============================================
  * SECTION : Local functions declaration
