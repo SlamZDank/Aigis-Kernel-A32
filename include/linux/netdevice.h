@@ -564,6 +564,8 @@ enum netdev_queue_state_t {
  * netif_xmit*stopped functions, they should only be using netif_tx_*.
  */
 
+struct xdp_umem;
+
 struct netdev_queue {
 /*
  * read-mostly part
@@ -583,10 +585,6 @@ struct netdev_queue {
 	 * (/sys/class/net/DEV/Q/trans_timeout)
 	 */
 	unsigned long		trans_timeout;
-
-#ifdef CONFIG_XDP_SOCKETS
-	struct xdp_umem         *umem;
-#endif
 /*
  * write-mostly part
  */
@@ -598,6 +596,11 @@ struct netdev_queue {
 	unsigned long		trans_start;
 
 	unsigned long		state;
+
+#ifdef CONFIG_XDP_SOCKETS
+	/* backport: queue-local AF_XDP UMEM binding used by xdp_umem.c */
+	struct xdp_umem		*umem;
+#endif
 
 #ifdef CONFIG_BQL
 	struct dql		dql;
@@ -711,7 +714,8 @@ struct netdev_rx_queue {
 	struct net_device		*dev;
 	struct xdp_rxq_info		xdp_rxq;
 #ifdef CONFIG_XDP_SOCKETS
-	struct xdp_umem                 *umem;
+	/* backport: queue-local AF_XDP UMEM binding used by xdp_umem.c */
+	struct xdp_umem			*umem;
 #endif
 } ____cacheline_aligned_in_smp;
 
@@ -2127,6 +2131,12 @@ struct net *dev_net(const struct net_device *dev)
 }
 
 static inline
+struct net *dev_net_rcu(const struct net_device *dev)
+{
+	return read_pnet_rcu(&dev->nd_net);
+}
+
+static inline
 void dev_net_set(struct net_device *dev, struct net *net)
 {
 	write_pnet(&dev->nd_net, net);
@@ -2943,9 +2953,6 @@ struct softnet_data {
 	struct Qdisc		*output_queue;
 	struct Qdisc		**output_queue_tailp;
 	struct sk_buff		*completion_queue;
-#ifdef CONFIG_XFRM_OFFLOAD
-	struct sk_buff_head	xfrm_backlog;
-#endif
 	/* written and read only by owning cpu: */
 	struct {
 		u16 recursion;
@@ -3517,7 +3524,7 @@ int dev_get_phys_port_name(struct net_device *dev,
 			   char *name, size_t len);
 int dev_change_proto_down(struct net_device *dev, bool proto_down);
 int dev_change_proto_down_generic(struct net_device *dev, bool proto_down);
-struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev, bool *again);
+struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev);
 struct sk_buff *dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 				    struct netdev_queue *txq, int *ret);
 
