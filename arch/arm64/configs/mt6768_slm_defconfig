@@ -1928,7 +1928,6 @@ CONFIG_MTK_TINYSYS_SSPM_SUPPORT=y
 # CONFIG_MTK_MET_MEM_ALLOC is not set
 CONFIG_MTK_TINYSYS_SSPM_VERSION="v1"
 CONFIG_MTK_GPU_SUPPORT=y
-CONFIG_MTK_GPU_VERSION="mali valhall r32p1"
 # TODO try to port gpufreq v2 legacy
 # 4.14 mt6768 has it own gpufreq impl, 6.6 mt6768 is gpufreq v2_legacy. add these to avoid build errors
 # CONFIG_MTK_GPUFREQ_V2 is not set
