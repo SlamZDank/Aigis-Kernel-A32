@@ -59,7 +59,10 @@ struct bpf_reg_state {
 			u32 map_uid;
 		};
 
-		u32 btf_id; /* for PTR_TO_BTF_ID */
+		struct {
+			struct btf *btf;
+			u32 btf_id; /* for PTR_TO_BTF_ID */
+		};
 
 		u32 mem_size; /* for PTR_TO_MEM | PTR_TO_MEM_OR_NULL */
 
@@ -352,6 +355,7 @@ struct bpf_insn_aux_data {
 		};
 		struct {
 			enum bpf_reg_type reg_type;	/* type of pseudo_btf_id */
+			struct btf *btf;		/* BTF object for pseudo_btf_id */
 			union {
 				u32 btf_id;	/* btf_id for struct typed var */
 				u32 mem_size;	/* mem_size for non-struct typed var */
@@ -371,6 +375,7 @@ struct bpf_insn_aux_data {
 };
 
 #define MAX_USED_MAPS 64 /* max number of maps accessed by one eBPF program */
+#define MAX_USED_BTFS 64 /* max number of BTFs accessed by one BPF program */
 
 #define BPF_VERIFIER_TMP_LOG_SIZE	1024
 
@@ -437,7 +442,9 @@ struct bpf_verifier_env {
 	struct bpf_verifier_state_list **explored_states; /* search pruning optimization */
 	struct bpf_verifier_state_list *free_list;
 	struct bpf_map *used_maps[MAX_USED_MAPS]; /* array of map's used by eBPF program */
+	struct btf_mod_pair used_btfs[MAX_USED_BTFS]; /* array of BTFs used by BPF program */
 	u32 used_map_cnt;		/* number of used maps */
+	u32 used_btf_cnt;		/* number of used BTF objects */
 	u32 id_gen;			/* used to generate unique reg IDs */
 	bool explore_alu_limits;
 	bool allow_ptr_leaks;
@@ -511,10 +518,14 @@ int check_ctx_reg(struct bpf_verifier_env *env,
 		  const struct bpf_reg_state *reg, int regno);
 
 /* this lives here instead of in bpf.h because it needs to dereference tgt_prog */
+u32 btf_obj_id(const struct btf *btf);
+
 static inline u64 bpf_trampoline_compute_key(const struct bpf_prog *tgt_prog,
-					     u32 btf_id)
+						     struct btf *btf, u32 btf_id)
 {
-        return tgt_prog ? (((u64)tgt_prog->aux->id) << 32 | btf_id) : btf_id;
+	if (tgt_prog)
+		return ((u64)tgt_prog->aux->id << 32) | btf_id;
+	return ((u64)btf_obj_id(btf) << 32) | 0x80000000 | btf_id;
 }
 
 int bpf_check_attach_target(struct bpf_verifier_log *log,

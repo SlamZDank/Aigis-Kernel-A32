@@ -1783,6 +1783,8 @@ static void __bpf_prog_put_noref(struct bpf_prog *prog, bool deferred)
 	bpf_prog_kallsyms_del_all(prog);
 	btf_put(prog->aux->btf);
 	bpf_prog_free_linfo(prog);
+	if (prog->aux->attach_btf)
+		btf_put(prog->aux->attach_btf);
 
 	if (deferred) {
 		if (prog->aux->sleepable)
@@ -2032,10 +2034,14 @@ static void bpf_prog_load_fixup_attach_type(union bpf_attr *attr)
 static int
 bpf_prog_load_check_attach(enum bpf_prog_type prog_type,
 			   enum bpf_attach_type expected_attach_type,
-			   u32 btf_id, u32 prog_fd)
+			   struct btf *attach_btf, u32 btf_id,
+			   struct bpf_prog *dst_prog)
 {
 	if (btf_id) {
 		if (btf_id > BTF_MAX_TYPE)
+			return -EINVAL;
+
+		if (!attach_btf && !dst_prog)
 			return -EINVAL;
 
 		switch (prog_type) {
@@ -2049,7 +2055,10 @@ bpf_prog_load_check_attach(enum bpf_prog_type prog_type,
 		}
 	}
 
-	if (prog_fd && prog_type != BPF_PROG_TYPE_TRACING &&
+	if (attach_btf && (!btf_id || dst_prog))
+		return -EINVAL;
+
+	if (dst_prog && prog_type != BPF_PROG_TYPE_TRACING &&
 	    prog_type != BPF_PROG_TYPE_EXT)
 		return -EINVAL;
 
@@ -2162,12 +2171,13 @@ static bool is_perfmon_prog_type(enum bpf_prog_type prog_type)
 }
 
 /* last field in 'union bpf_attr' used by this command */
-#define	BPF_PROG_LOAD_LAST_FIELD attach_prog_fd
+#define	BPF_PROG_LOAD_LAST_FIELD fd_array
 
 static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr)
 {
 	enum bpf_prog_type type = attr->prog_type;
-	struct bpf_prog *prog;
+	struct bpf_prog *prog, *dst_prog = NULL;
+	struct btf *attach_btf = NULL;
 	int err;
 	char license[128];
 	bool is_gpl;
@@ -2210,29 +2220,56 @@ static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr)
 	if (is_perfmon_prog_type(type) && !perfmon_capable())
 		return -EPERM;
 
+	/* attach_prog_fd/attach_btf_obj_fd can specify fd of either bpf_prog
+	 * or btf, we need to check which one it is.
+	 */
+	if (attr->attach_prog_fd) {
+		dst_prog = bpf_prog_get(attr->attach_prog_fd);
+		if (IS_ERR(dst_prog)) {
+			dst_prog = NULL;
+			attach_btf = btf_get_by_fd(attr->attach_btf_obj_fd);
+			if (IS_ERR(attach_btf))
+				return -EINVAL;
+			if (!btf_is_kernel(attach_btf)) {
+				btf_put(attach_btf);
+				return -ENOTSUPP;
+			}
+		}
+	} else if (attr->attach_btf_id) {
+		/* fall back to vmlinux BTF, if BTF type ID is specified */
+		attach_btf = bpf_get_btf_vmlinux();
+		if (IS_ERR(attach_btf))
+			return PTR_ERR(attach_btf);
+		if (!attach_btf)
+			return -EINVAL;
+		btf_get(attach_btf);
+	}
+
 	bpf_prog_load_fixup_attach_type(attr);
 	if (bpf_prog_load_check_attach(type, attr->expected_attach_type,
-				       attr->attach_btf_id,
-				       attr->attach_prog_fd))
+				       attach_btf, attr->attach_btf_id,
+				       dst_prog)) {
+		if (dst_prog)
+			bpf_prog_put(dst_prog);
+		if (attach_btf)
+			btf_put(attach_btf);
 		return -EINVAL;
+	}
 
 	/* plain bpf_prog allocation */
 	prog = bpf_prog_alloc(bpf_prog_size(attr->insn_cnt), GFP_USER);
-	if (!prog)
+	if (!prog) {
+		if (dst_prog)
+			bpf_prog_put(dst_prog);
+		if (attach_btf)
+			btf_put(attach_btf);
 		return -ENOMEM;
+	}
 
 	prog->expected_attach_type = attr->expected_attach_type;
+	prog->aux->attach_btf = attach_btf;
 	prog->aux->attach_btf_id = attr->attach_btf_id;
-	if (attr->attach_prog_fd) {
-		struct bpf_prog *dst_prog;
-
-		dst_prog = bpf_prog_get(attr->attach_prog_fd);
-		if (IS_ERR(dst_prog)) {
-			err = PTR_ERR(dst_prog);
-			goto free_prog_nouncharge;
-		}
-		prog->aux->dst_prog = dst_prog;
-	}
+	prog->aux->dst_prog = dst_prog;
 
 	prog->aux->offload_requested = !!attr->prog_ifindex;
 	prog->aux->sleepable = attr->prog_flags & BPF_F_SLEEPABLE;
@@ -2324,6 +2361,8 @@ free_prog:
 free_prog_sec:
 	security_bpf_prog_free(prog->aux);
 free_prog_nouncharge:
+	if (prog->aux->attach_btf)
+		btf_put(prog->aux->attach_btf);
 	bpf_prog_free(prog);
 	return err;
 }
@@ -2686,7 +2725,7 @@ static int bpf_tracing_prog_attach(struct bpf_prog *prog,
 			goto out_put_prog;
 		}
 
-		key = bpf_trampoline_compute_key(tgt_prog, btf_id);
+		key = bpf_trampoline_compute_key(tgt_prog, NULL, btf_id);
 	}
 
 	link = kzalloc(sizeof(*link), GFP_USER);
@@ -2719,8 +2758,15 @@ static int bpf_tracing_prog_attach(struct bpf_prog *prog,
          * specified on load is illegal, and we reject that here.
 	 */
 	if (!prog->aux->dst_trampoline && !tgt_prog) {
-		err = -ENOENT;
-		goto out_unlock;
+		/* Allow re-attach for TRACING and LSM programs. */
+		if (prog->type != BPF_PROG_TYPE_TRACING &&
+		    prog->type != BPF_PROG_TYPE_LSM) {
+			err = -EINVAL;
+			goto out_unlock;
+		}
+		btf_id = prog->aux->attach_btf_id;
+		key = bpf_trampoline_compute_key(NULL, prog->aux->attach_btf,
+						btf_id);
 	}
 
 	if (!prog->aux->dst_trampoline ||
