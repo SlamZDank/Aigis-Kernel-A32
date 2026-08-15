@@ -200,6 +200,11 @@ CONFIG_NET_CLS_ACT=y
 CONFIG_VSOCKETS=y
 CONFIG_VIRTIO_VSOCKETS=y
 CONFIG_BPF_JIT=y
+<<<<<<< HEAD:arch/arm64/configs/cuttlefish_defconfig
+=======
+CONFIG_NET_ACT_BPF=y
+CONFIG_BT=y
+>>>>>>> c9829048bc64 (BACKPORT: bpf: add BTF ID resolver build support):arch/arm64/configs/gki_defconfig
 CONFIG_CFG80211=y
 # CONFIG_CFG80211_DEFAULT_PS is not set
 CONFIG_MAC80211=y
@@ -446,6 +451,11 @@ CONFIG_PSTORE_RAM=y
 CONFIG_UNICODE=y
 CONFIG_PRINTK_TIME=y
 CONFIG_DEBUG_INFO=y
+<<<<<<< HEAD:arch/arm64/configs/cuttlefish_defconfig
+=======
+CONFIG_DEBUG_INFO_DWARF4=y
+CONFIG_DEBUG_INFO_BTF=y
+>>>>>>> c9829048bc64 (BACKPORT: bpf: add BTF ID resolver build support):arch/arm64/configs/gki_defconfig
 # CONFIG_ENABLE_MUST_CHECK is not set
 CONFIG_FRAME_WARN=1024
 # CONFIG_SECTION_MISMATCH_WARN_ONLY is not set

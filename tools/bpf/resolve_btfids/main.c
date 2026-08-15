@@ -1,737 +1,823 @@
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 
 /*
- * resolve_btfids scans Elf object for .BTF_ids section and resolves
- * its symbols with BTF ID values.
+ * Resolve the BTF IDs emitted by include/linux/btf_ids.h.
  *
- * Each symbol points to 4 bytes data and is expected to have
- * following name syntax:
- *
- * __BTF_ID__<type>__<symbol>[__<id>]
- *
- * type is:
- *
- *   func    - lookup BTF_KIND_FUNC symbol with <symbol> name
- *             and store its ID into the data:
- *
- *             __BTF_ID__func__vfs_close__1:
- *             .zero 4
- *
- *   struct  - lookup BTF_KIND_STRUCT symbol with <symbol> name
- *             and store its ID into the data:
- *
- *             __BTF_ID__struct__sk_buff__1:
- *             .zero 4
- *
- *   union   - lookup BTF_KIND_UNION symbol with <symbol> name
- *             and store its ID into the data:
- *
- *             __BTF_ID__union__thread_union__1:
- *             .zero 4
- *
- *   typedef - lookup BTF_KIND_TYPEDEF symbol with <symbol> name
- *             and store its ID into the data:
- *
- *             __BTF_ID__typedef__pid_t__1:
- *             .zero 4
- *
- *   set     - store symbol size into first 4 bytes and sort following
- *             ID list
- *
- *             __BTF_ID__set__list:
- *             .zero 4
- *             list:
- *             __BTF_ID__func__vfs_getattr__3:
- *             .zero 4
- *             __BTF_ID__func__vfs_fallocate__4:
- *             .zero 4
+ * This is kept self-contained because the vendor 4.19 tree carries the
+ * kernel-side BTF implementation but an older tools/lib/bpf snapshot.
  */
 
-#define  _GNU_SOURCE
-#include <ctype.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <libelf.h>
-#include <gelf.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#define _GNU_SOURCE
+
+#include <elf.h>
+#include <endian.h>
 #include <errno.h>
-#include <linux/rbtree.h>
-#include <linux/zalloc.h>
-#include <linux/err.h>
-#include <btf.h>
-#include <libbpf.h>
-#include <parse-options.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <gelf.h>
+#include <inttypes.h>
+#include <libelf.h>
+#include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-#define BTF_IDS_SECTION	".BTF_ids"
-#define BTF_ID		"__BTF_ID__"
+#include <linux/btf.h>
 
-#define BTF_STRUCT	"struct"
-#define BTF_UNION	"union"
-#define BTF_TYPEDEF	"typedef"
-#define BTF_FUNC	"func"
-#define BTF_SET		"set"
+#define BTF_IDS_SECTION ".BTF_ids"
+#define BTF_SECTION ".BTF"
+#define BTF_ID_PREFIX "__BTF_ID__"
 
-#define ADDR_CNT	100
+/* BTF kinds added after the 4.19 UAPI header. */
+#ifndef BTF_KIND_FLOAT
+#define BTF_KIND_FLOAT 16
+#endif
+#ifndef BTF_KIND_DECL_TAG
+#define BTF_KIND_DECL_TAG 17
+#endif
+#ifndef BTF_KIND_TYPE_TAG
+#define BTF_KIND_TYPE_TAG 18
+#endif
+#ifndef BTF_KIND_ENUM64
+#define BTF_KIND_ENUM64 19
+#endif
 
-struct btf_id {
-	struct rb_node	 rb_node;
-	char		*name;
-	union {
-		int	 id;
-		int	 cnt;
-	};
-	int		 addr_cnt;
-	Elf64_Addr	 addr[ADDR_CNT];
+#define BTF_KIND_SET 255
+
+enum id_kind {
+	ID_STRUCT = BTF_KIND_STRUCT,
+	ID_UNION = BTF_KIND_UNION,
+	ID_TYPEDEF = BTF_KIND_TYPEDEF,
+	ID_FUNC = BTF_KIND_FUNC,
+	ID_SET = BTF_KIND_SET,
+};
+
+struct id_entry {
+	enum id_kind kind;
+	char *name;
+	uint32_t id;
+	uint64_t *addresses;
+	size_t address_count;
+	size_t address_capacity;
+	uint64_t set_size;
+};
+
+struct btf_view {
+	const unsigned char *data;
+	size_t data_size;
+	const unsigned char *types;
+	size_t type_size;
+	const unsigned char *strings;
+	size_t string_size;
 };
 
 struct object {
 	const char *path;
-	const char *btf;
-
-	struct {
-		int		 fd;
-		Elf		*elf;
-		Elf_Data	*symbols;
-		Elf_Data	*idlist;
-		int		 symbols_shndx;
-		int		 idlist_shndx;
-		size_t		 strtabidx;
-		unsigned long	 idlist_addr;
-	} efile;
-
-	struct rb_root	sets;
-	struct rb_root	structs;
-	struct rb_root	unions;
-	struct rb_root	typedefs;
-	struct rb_root	funcs;
-
-	int nr_funcs;
-	int nr_structs;
-	int nr_unions;
-	int nr_typedefs;
+	int fd;
+	Elf *elf;
+	Elf_Data *symbols;
+	Elf_Data *ids;
+	Elf_Data *btf;
+	size_t symbol_section;
+	size_t ids_section;
+	size_t string_section;
+	uint64_t ids_address;
+	size_t ids_size;
+	struct id_entry *entries;
+	size_t entry_count;
+	size_t entry_capacity;
 };
 
 static int verbose;
 
-int eprintf(int level, int var, const char *fmt, ...)
+static void message(const char *level, const char *fmt, ...)
 {
 	va_list args;
-	int ret;
 
-	if (var >= level) {
-		va_start(args, fmt);
-		ret = vfprintf(stderr, fmt, args);
-		va_end(args);
-	}
-	return ret;
+	va_start(args, fmt);
+	fprintf(stderr, "%s: ", level);
+	vfprintf(stderr, fmt, args);
+	fprintf(stderr, "\n");
+	va_end(args);
 }
 
-#ifndef pr_fmt
-#define pr_fmt(fmt) fmt
-#endif
-
-#define pr_debug(fmt, ...) \
-	eprintf(1, verbose, pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_debugN(n, fmt, ...) \
-	eprintf(n, verbose, pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_debug2(fmt, ...) pr_debugN(2, pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_err(fmt, ...) \
-	eprintf(0, verbose, pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_info(fmt, ...) \
-	eprintf(0, verbose, pr_fmt(fmt), ##__VA_ARGS__)
-
-static bool is_btf_id(const char *name)
+static uint16_t read_le16(const void *ptr)
 {
-	return name && !strncmp(name, BTF_ID, sizeof(BTF_ID) - 1);
+	uint16_t value;
+
+	memcpy(&value, ptr, sizeof(value));
+	return le16toh(value);
 }
 
-static struct btf_id *btf_id__find(struct rb_root *root, const char *name)
+static uint32_t read_le32(const void *ptr)
 {
-	struct rb_node *p = root->rb_node;
-	struct btf_id *id;
-	int cmp;
+	uint32_t value;
 
-	while (p) {
-		id = rb_entry(p, struct btf_id, rb_node);
-		cmp = strcmp(id->name, name);
-		if (cmp < 0)
-			p = p->rb_left;
-		else if (cmp > 0)
-			p = p->rb_right;
-		else
-			return id;
+	memcpy(&value, ptr, sizeof(value));
+	return le32toh(value);
+}
+
+static void write_native32(void *ptr, uint32_t value)
+{
+	memcpy(ptr, &value, sizeof(value));
+}
+
+static char *duplicate_string(const char *string)
+{
+	char *copy = strdup(string);
+
+	if (!copy)
+		message("error", "out of memory");
+	return copy;
+}
+
+static struct id_entry *find_entry(struct object *object,
+				   enum id_kind kind, const char *name)
+{
+	size_t i;
+
+	for (i = 0; i < object->entry_count; i++) {
+		struct id_entry *entry = &object->entries[i];
+
+		if (entry->kind == kind && !strcmp(entry->name, name))
+			return entry;
 	}
 	return NULL;
 }
 
-static struct btf_id*
-btf_id__add(struct rb_root *root, char *name, bool unique)
+static struct id_entry *get_entry(struct object *object,
+				  enum id_kind kind, const char *name)
 {
-	struct rb_node **p = &root->rb_node;
-	struct rb_node *parent = NULL;
-	struct btf_id *id;
-	int cmp;
+	struct id_entry *entry;
 
-	while (*p != NULL) {
-		parent = *p;
-		id = rb_entry(parent, struct btf_id, rb_node);
-		cmp = strcmp(id->name, name);
-		if (cmp < 0)
-			p = &(*p)->rb_left;
-		else if (cmp > 0)
-			p = &(*p)->rb_right;
-		else
-			return unique ? NULL : id;
-	}
+	entry = find_entry(object, kind, name);
+	if (entry)
+		return entry;
 
-	id = zalloc(sizeof(*id));
-	if (id) {
-		pr_debug("adding symbol %s\n", name);
-		id->name = name;
-		rb_link_node(&id->rb_node, parent, p);
-		rb_insert_color(&id->rb_node, root);
-	}
-	return id;
-}
+	if (object->entry_count == object->entry_capacity) {
+		size_t capacity = object->entry_capacity ?
+			object->entry_capacity * 2 : 32;
+		struct id_entry *entries;
 
-static char *get_id(const char *prefix_end)
-{
-	/*
-	 * __BTF_ID__func__vfs_truncate__0
-	 * prefix_end =  ^
-	 */
-	char *p, *id = strdup(prefix_end + sizeof("__") - 1);
-
-	if (id) {
-		/*
-		 * __BTF_ID__func__vfs_truncate__0
-		 * id =            ^
-		 *
-		 * cut the unique id part when present; set symbols use
-		 * __BTF_ID__set__<name> and intentionally have no suffix.
-		 */
-		p = strrchr(id, '_');
-		if (p && p > id && *(p - 1) == '_') {
-			char *suffix = p + 1;
-
-			while (*suffix) {
-				if (!isdigit(*suffix))
-					return id;
-				suffix++;
-			}
-
-			*(p - 1) = '\0';
+		entries = realloc(object->entries, capacity * sizeof(*entries));
+		if (!entries) {
+			message("error", "out of memory");
+			return NULL;
 		}
+		object->entries = entries;
+		object->entry_capacity = capacity;
 	}
-	return id;
-}
 
-static struct btf_id *add_symbol(struct rb_root *root, char *name, size_t size)
-{
-	char *id;
-
-	id = get_id(name + size);
-	if (!id) {
-		pr_err("FAILED to parse symbol name: %s\n", name);
+	entry = &object->entries[object->entry_count++];
+	memset(entry, 0, sizeof(*entry));
+	entry->kind = kind;
+	entry->name = duplicate_string(name);
+	if (!entry->name) {
+		object->entry_count--;
 		return NULL;
 	}
-
-	return btf_id__add(root, id, false);
+	return entry;
 }
 
-static int elf_collect(struct object *obj)
+static int add_address(struct id_entry *entry, uint64_t address)
 {
-	Elf_Scn *scn = NULL;
-	size_t shdrstrndx;
-	int idx = 0;
-	Elf *elf;
-	int fd;
+	if (entry->address_count == entry->address_capacity) {
+		size_t capacity = entry->address_capacity ?
+			entry->address_capacity * 2 : 4;
+		uint64_t *addresses;
 
-	fd = open(obj->path, O_RDWR, 0666);
-	if (fd == -1) {
-		pr_err("FAILED cannot open %s: %s\n",
-			obj->path, strerror(errno));
-		return -1;
+		addresses = realloc(entry->addresses,
+				   capacity * sizeof(*addresses));
+		if (!addresses) {
+			message("error", "out of memory");
+			return -ENOMEM;
+		}
+		entry->addresses = addresses;
+		entry->address_capacity = capacity;
 	}
 
-	elf_version(EV_CURRENT);
-
-	elf = elf_begin(fd, ELF_C_RDWR_MMAP, NULL);
-	if (!elf) {
-		pr_err("FAILED cannot create ELF descriptor: %s\n",
-			elf_errmsg(-1));
-		return -1;
-	}
-
-	obj->efile.fd  = fd;
-	obj->efile.elf = elf;
-
-	elf_flagelf(elf, ELF_C_SET, ELF_F_LAYOUT);
-
-	if (elf_getshdrstrndx(elf, &shdrstrndx) != 0) {
-		pr_err("FAILED cannot get shdr str ndx\n");
-		return -1;
-	}
-
-	/*
-	 * Scan all the elf sections and look for save data
-	 * from .BTF_ids section and symbols.
-	 */
-	while ((scn = elf_nextscn(elf, scn)) != NULL) {
-		Elf_Data *data;
-		GElf_Shdr sh;
-		char *name;
-
-		idx++;
-		if (gelf_getshdr(scn, &sh) != &sh) {
-			pr_err("FAILED get section(%d) header\n", idx);
-			return -1;
-		}
-
-		name = elf_strptr(elf, shdrstrndx, sh.sh_name);
-		if (!name) {
-			pr_err("FAILED get section(%d) name\n", idx);
-			return -1;
-		}
-
-		data = elf_getdata(scn, 0);
-		if (!data) {
-			pr_err("FAILED to get section(%d) data from %s\n",
-				idx, name);
-			return -1;
-		}
-
-		pr_debug2("section(%d) %s, size %ld, link %d, flags %lx, type=%d\n",
-			  idx, name, (unsigned long) data->d_size,
-			  (int) sh.sh_link, (unsigned long) sh.sh_flags,
-			  (int) sh.sh_type);
-
-		if (sh.sh_type == SHT_SYMTAB) {
-			obj->efile.symbols       = data;
-			obj->efile.symbols_shndx = idx;
-			obj->efile.strtabidx     = sh.sh_link;
-		} else if (!strcmp(name, BTF_IDS_SECTION)) {
-			obj->efile.idlist       = data;
-			obj->efile.idlist_shndx = idx;
-			obj->efile.idlist_addr  = sh.sh_addr;
-		}
-	}
-
+	entry->addresses[entry->address_count++] = address;
 	return 0;
 }
 
-static int symbols_collect(struct object *obj)
+static int parse_symbol_name(const char *symbol, enum id_kind *kind,
+			     char **name)
 {
-	Elf_Scn *scn = NULL;
-	int n, i, err = 0;
-	GElf_Shdr sh;
-	char *name;
+	static const struct {
+		const char *prefix;
+		enum id_kind kind;
+	} kinds[] = {
+		{ "struct__", ID_STRUCT },
+		{ "union__", ID_UNION },
+		{ "typedef__", ID_TYPEDEF },
+		{ "func__", ID_FUNC },
+	};
+	const char *prefix;
+	size_t i;
 
-	scn = elf_getscn(obj->efile.elf, obj->efile.symbols_shndx);
-	if (!scn)
-		return -1;
+	if (strncmp(symbol, BTF_ID_PREFIX, sizeof(BTF_ID_PREFIX) - 1))
+		return 0;
 
-	if (gelf_getshdr(scn, &sh) != &sh)
-		return -1;
+	prefix = symbol + sizeof(BTF_ID_PREFIX) - 1;
+	if (!strncmp(prefix, "set__", sizeof("set__") - 1)) {
+		*kind = ID_SET;
+		*name = duplicate_string(prefix + sizeof("set__") - 1);
+		return *name ? 1 : -ENOMEM;
+	}
 
-	n = sh.sh_size / sh.sh_entsize;
+	for (i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) {
+		size_t prefix_size = strlen(kinds[i].prefix);
+		char *id;
+		char *suffix;
 
-	/*
-	 * Scan symbols and look for the ones starting with
-	 * __BTF_ID__* over .BTF_ids section.
-	 */
-	for (i = 0; !err && i < n; i++) {
-		char *tmp, *prefix;
-		struct btf_id *id;
-		GElf_Sym sym;
-		int err = -1;
-
-		if (!gelf_getsym(obj->efile.symbols, i, &sym))
-			return -1;
-
-		if (sym.st_shndx != obj->efile.idlist_shndx)
+		if (strncmp(prefix, kinds[i].prefix, prefix_size))
 			continue;
 
-		name = elf_strptr(obj->efile.elf, obj->efile.strtabidx,
-				  sym.st_name);
-
-		if (!is_btf_id(name))
-			continue;
-
-		/*
-		 * __BTF_ID__TYPE__vfs_truncate__0
-		 * prefix =  ^
-		 */
-		prefix = name + sizeof(BTF_ID) - 1;
-
-		/* struct */
-		if (!strncmp(prefix, BTF_STRUCT, sizeof(BTF_STRUCT) - 1)) {
-			obj->nr_structs++;
-			id = add_symbol(&obj->structs, prefix, sizeof(BTF_STRUCT) - 1);
-		/* union  */
-		} else if (!strncmp(prefix, BTF_UNION, sizeof(BTF_UNION) - 1)) {
-			obj->nr_unions++;
-			id = add_symbol(&obj->unions, prefix, sizeof(BTF_UNION) - 1);
-		/* typedef */
-		} else if (!strncmp(prefix, BTF_TYPEDEF, sizeof(BTF_TYPEDEF) - 1)) {
-			obj->nr_typedefs++;
-			id = add_symbol(&obj->typedefs, prefix, sizeof(BTF_TYPEDEF) - 1);
-		/* func */
-		} else if (!strncmp(prefix, BTF_FUNC, sizeof(BTF_FUNC) - 1)) {
-			obj->nr_funcs++;
-			id = add_symbol(&obj->funcs, prefix, sizeof(BTF_FUNC) - 1);
-		/* set */
-		} else if (!strncmp(prefix, BTF_SET, sizeof(BTF_SET) - 1)) {
-			id = add_symbol(&obj->sets, prefix, sizeof(BTF_SET) - 1);
-			/*
-			 * SET objects store list's count, which is encoded
-			 * in symbol's size, together with 'cnt' field hence
-			 * that - 1.
-			 */
-			if (id)
-				id->cnt = sym.st_size / sizeof(int) - 1;
-		} else {
-			pr_err("FAILED unsupported prefix %s\n", prefix);
-			return -1;
-		}
-
+		id = duplicate_string(prefix + prefix_size);
 		if (!id)
 			return -ENOMEM;
 
-		if (id->addr_cnt >= ADDR_CNT) {
-			pr_err("FAILED symbol %s crossed the number of allowed lists",
-				id->name);
-			return -1;
+		/*
+		 * The final "__<counter>" makes each assembler symbol unique.
+		 * Remove it while retaining names that contain a single '_'.
+		 */
+		suffix = strrchr(id, '_');
+		if (!suffix || suffix == id || suffix[-1] != '_') {
+			message("error", "malformed BTF ID symbol: %s", symbol);
+			free(id);
+			return -EINVAL;
 		}
-		id->addr[id->addr_cnt++] = sym.st_value;
-	}
-
-	return 0;
-}
-
-static struct btf *btf__parse_raw(const char *file)
-{
-	struct btf *btf;
-	struct stat st;
-	__u8 *buf;
-	FILE *f;
-
-	if (stat(file, &st))
-		return NULL;
-
-	f = fopen(file, "rb");
-	if (!f)
-		return NULL;
-
-	buf = malloc(st.st_size);
-	if (!buf) {
-		btf = ERR_PTR(-ENOMEM);
-		goto exit_close;
-	}
-
-	if ((size_t) st.st_size != fread(buf, 1, st.st_size, f)) {
-		btf = ERR_PTR(-EINVAL);
-		goto exit_free;
-	}
-
-	btf = btf__new(buf, st.st_size);
-
-exit_free:
-	free(buf);
-exit_close:
-	fclose(f);
-	return btf;
-}
-
-static bool is_btf_raw(const char *file)
-{
-	__u16 magic = 0;
-	int fd, nb_read;
-
-	fd = open(file, O_RDONLY);
-	if (fd < 0)
-		return false;
-
-	nb_read = read(fd, &magic, sizeof(magic));
-	close(fd);
-	return nb_read == sizeof(magic) && magic == BTF_MAGIC;
-}
-
-static struct btf *btf_open(const char *path)
-{
-	if (is_btf_raw(path))
-		return btf__parse_raw(path);
-	else
-		return btf__parse_elf(path, NULL);
-}
-
-static int symbols_resolve(struct object *obj)
-{
-	int nr_typedefs = obj->nr_typedefs;
-	int nr_structs  = obj->nr_structs;
-	int nr_unions   = obj->nr_unions;
-	int nr_funcs    = obj->nr_funcs;
-	int err, type_id;
-	struct btf *btf;
-	__u32 nr_types;
-
-	btf = btf_open(obj->btf ?: obj->path);
-	err = libbpf_get_error(btf);
-	if (err) {
-		pr_err("FAILED: load BTF from %s: %s",
-			obj->path, strerror(err));
-		return -1;
-	}
-
-	err = -1;
-	nr_types = btf__get_nr_types(btf);
-
-	/*
-	 * Iterate all the BTF types and search for collected symbol IDs.
-	 */
-	for (type_id = 1; type_id <= nr_types; type_id++) {
-		const struct btf_type *type;
-		struct rb_root *root;
-		struct btf_id *id;
-		const char *str;
-		int *nr;
-
-		type = btf__type_by_id(btf, type_id);
-		if (!type) {
-			pr_err("FAILED: malformed BTF, can't resolve type for ID %d\n",
-				type_id);
-			goto out;
+		suffix[-1] = '\0';
+		if (!id[0]) {
+			message("error", "empty BTF ID name: %s", symbol);
+			free(id);
+			return -EINVAL;
 		}
 
-		if (btf_is_func(type) && nr_funcs) {
-			nr   = &nr_funcs;
-			root = &obj->funcs;
-		} else if (btf_is_struct(type) && nr_structs) {
-			nr   = &nr_structs;
-			root = &obj->structs;
-		} else if (btf_is_union(type) && nr_unions) {
-			nr   = &nr_unions;
-			root = &obj->unions;
-		} else if (btf_is_typedef(type) && nr_typedefs) {
-			nr   = &nr_typedefs;
-			root = &obj->typedefs;
-		} else
-			continue;
-
-		str = btf__name_by_offset(btf, type->name_off);
-		if (!str) {
-			pr_err("FAILED: malformed BTF, can't resolve name for ID %d\n",
-				type_id);
-			goto out;
-		}
-
-		id = btf_id__find(root, str);
-		if (id) {
-			if (id->id) {
-				pr_info("WARN: multiple IDs found for '%s': %d, %d - using %d\n",
-					str, id->id, type_id, id->id);
-			} else {
-				id->id = type_id;
-				(*nr)--;
-			}
-		}
+		*kind = kinds[i].kind;
+		*name = id;
+		return 1;
 	}
 
-	err = 0;
-out:
-	btf__free(btf);
-	return err;
+	message("error", "unsupported BTF ID symbol: %s", symbol);
+	return -EINVAL;
 }
 
-static int id_patch(struct object *obj, struct btf_id *id)
+static int collect_sections(struct object *object)
 {
-	Elf_Data *data = obj->efile.idlist;
-	int *ptr = data->d_buf;
-	int i;
+	size_t section_count;
+	size_t string_index;
+	size_t i;
 
-	if (!id->id) {
-		pr_err("FAILED unresolved symbol %s\n", id->name);
+	if (elf_getshdrnum(object->elf, &section_count) < 0 ||
+	    elf_getshdrstrndx(object->elf, &string_index) < 0) {
+		message("error", "cannot enumerate ELF sections: %s",
+			elf_errmsg(-1));
 		return -EINVAL;
 	}
 
-	for (i = 0; i < id->addr_cnt; i++) {
-		unsigned long addr = id->addr[i];
-		unsigned long idx = addr - obj->efile.idlist_addr;
+	for (i = 1; i < section_count; i++) {
+		Elf_Scn *section = elf_getscn(object->elf, i);
+		Elf_Data *data;
+		GElf_Shdr header;
+		const char *name;
 
-		pr_debug("patching addr %5lu: ID %7d [%s]\n",
-			 idx, id->id, id->name);
-
-		if (idx >= data->d_size) {
-			pr_err("FAILED patching index %lu out of bounds %lu\n",
-				idx, data->d_size);
-			return -1;
+		if (!section || !gelf_getshdr(section, &header)) {
+			message("error", "cannot read ELF section %zu", i);
+			return -EINVAL;
 		}
 
-		idx = idx / sizeof(int);
-		ptr[idx] = id->id;
+		name = elf_strptr(object->elf, string_index, header.sh_name);
+		data = elf_getdata(section, NULL);
+		if (!name || !data) {
+			message("error", "cannot read ELF section %zu data", i);
+			return -EINVAL;
+		}
+
+		if (header.sh_type == SHT_SYMTAB) {
+			object->symbols = data;
+			object->symbol_section = i;
+			object->string_section = header.sh_link;
+		} else if (!strcmp(name, BTF_IDS_SECTION)) {
+			object->ids = data;
+			object->ids_section = i;
+			object->ids_address = header.sh_addr;
+			object->ids_size = data->d_size;
+		} else if (!strcmp(name, BTF_SECTION)) {
+			object->btf = data;
+		}
+	}
+
+	if (!object->symbols) {
+		message("error", "ELF is missing SHT_SYMTAB");
+		return -ENOENT;
 	}
 
 	return 0;
 }
 
-static int __symbols_patch(struct object *obj, struct rb_root *root)
+static int symbol_address(struct object *object, uint64_t value,
+			  size_t *offset)
 {
-	struct rb_node *next;
-	struct btf_id *id;
+	uint64_t relative;
 
-	next = rb_first(root);
-	while (next) {
-		id = rb_entry(next, struct btf_id, rb_node);
+	if (value < object->ids_address) {
+		message("error", "BTF ID address is before %s", BTF_IDS_SECTION);
+		return -EINVAL;
+	}
 
-		if (id_patch(obj, id))
-			return -1;
+	relative = value - object->ids_address;
+	if (relative > object->ids_size ||
+	    object->ids_size - relative < sizeof(uint32_t) ||
+	    relative % sizeof(uint32_t)) {
+		message("error", "BTF ID address is outside %s", BTF_IDS_SECTION);
+		return -EINVAL;
+	}
 
-		next = rb_next(next);
+	*offset = (size_t)relative;
+	return 0;
+}
+
+static int collect_symbols(struct object *object)
+{
+	Elf_Scn *section;
+	GElf_Shdr header;
+	size_t count;
+	size_t i;
+
+	section = elf_getscn(object->elf, object->symbol_section);
+	if (!section || !gelf_getshdr(section, &header) || !header.sh_entsize) {
+		message("error", "cannot read ELF symbol table");
+		return -EINVAL;
+	}
+
+	count = header.sh_size / header.sh_entsize;
+	for (i = 0; i < count; i++) {
+		GElf_Sym symbol;
+		const char *name;
+		enum id_kind kind;
+		char *id_name = NULL;
+		struct id_entry *entry;
+		size_t offset;
+		int parsed;
+
+		if (!gelf_getsym(object->symbols, i, &symbol))
+			return -EINVAL;
+		if (symbol.st_shndx != object->ids_section)
+			continue;
+
+		name = elf_strptr(object->elf, object->string_section,
+				  symbol.st_name);
+		if (!name)
+			return -EINVAL;
+
+		parsed = parse_symbol_name(name, &kind, &id_name);
+		if (parsed <= 0) {
+			if (parsed < 0)
+				return parsed;
+			continue;
+		}
+
+		if (symbol_address(object, symbol.st_value, &offset)) {
+			free(id_name);
+			return -EINVAL;
+		}
+
+		entry = get_entry(object, kind, id_name);
+		free(id_name);
+		if (!entry)
+			return -ENOMEM;
+
+		if (kind == ID_SET) {
+			if (entry->address_count) {
+				message("error", "duplicate BTF ID set: %s",
+					entry->name);
+				return -EINVAL;
+			}
+			if (symbol.st_size < sizeof(uint32_t) ||
+			    symbol.st_size % sizeof(uint32_t)) {
+				message("error", "malformed BTF ID set: %s",
+					entry->name);
+				return -EINVAL;
+			}
+			entry->set_size = symbol.st_size;
+		}
+
+		if (add_address(entry, offset))
+			return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static int load_file(const char *path, unsigned char **data, size_t *size)
+{
+	struct stat statbuf;
+	size_t done = 0;
+	int fd;
+
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		message("error", "cannot open BTF file %s: %s",
+			path, strerror(errno));
+		return -errno;
+	}
+	if (fstat(fd, &statbuf) || statbuf.st_size < 0 ||
+	    (uintmax_t)statbuf.st_size > SIZE_MAX) {
+		message("error", "cannot stat BTF file %s: %s",
+			path, strerror(errno));
+		close(fd);
+		return -EINVAL;
+	}
+
+	*size = (size_t)statbuf.st_size;
+	*data = malloc(*size);
+	if (!*data) {
+		close(fd);
+		return -ENOMEM;
+	}
+
+	while (done < *size) {
+		ssize_t count = read(fd, *data + done, *size - done);
+
+		if (count <= 0) {
+			message("error", "cannot read BTF file %s: %s",
+				path, count < 0 ? strerror(errno) : "short read");
+			free(*data);
+			*data = NULL;
+			close(fd);
+			return -EIO;
+		}
+		done += count;
+	}
+	close(fd);
+	return 0;
+}
+
+static int btf_view_init(struct btf_view *view, const void *data, size_t size)
+{
+	const unsigned char *raw = data;
+	uint32_t header_size;
+	uint32_t type_offset;
+	uint32_t type_size;
+	uint32_t string_offset;
+	uint32_t string_size;
+	uint16_t magic;
+	uint8_t version;
+
+	if (size < sizeof(struct btf_header))
+		return -EINVAL;
+
+	magic = read_le16(raw);
+	version = raw[2];
+	header_size = read_le32(raw + 4);
+	type_offset = read_le32(raw + 8);
+	type_size = read_le32(raw + 12);
+	string_offset = read_le32(raw + 16);
+	string_size = read_le32(raw + 20);
+
+	if (magic != BTF_MAGIC || version != BTF_VERSION ||
+	    header_size < sizeof(struct btf_header) || header_size > size ||
+	    type_offset > size - header_size ||
+	    type_size > size - header_size - type_offset ||
+	    string_offset > size - header_size ||
+	    string_size > size - header_size - string_offset ||
+	    !string_size) {
+		message("error", "malformed BTF data");
+		return -EINVAL;
+	}
+
+	view->data = raw;
+	view->data_size = size;
+	view->types = raw + header_size + type_offset;
+	view->type_size = type_size;
+	view->strings = raw + header_size + string_offset;
+	view->string_size = string_size;
+	return 0;
+}
+
+static const char *btf_string(const struct btf_view *view, uint32_t offset)
+{
+	const unsigned char *start;
+
+	if (offset >= view->string_size)
+		return NULL;
+	start = view->strings + offset;
+	if (!memchr(start, '\0', view->string_size - offset))
+		return NULL;
+	return (const char *)start;
+}
+
+static int btf_record_size(uint32_t kind, uint32_t vlen, size_t *size)
+{
+	size_t extra = 0;
+	size_t item_size = 0;
+
+	switch (kind) {
+	case BTF_KIND_INT:
+		extra = sizeof(uint32_t);
+		break;
+	case BTF_KIND_ARRAY:
+		extra = sizeof(struct btf_array);
+		break;
+	case BTF_KIND_STRUCT:
+	case BTF_KIND_UNION:
+		item_size = sizeof(struct btf_member);
+		break;
+	case BTF_KIND_ENUM:
+		item_size = sizeof(struct btf_enum);
+		break;
+	case BTF_KIND_FUNC_PROTO:
+		item_size = sizeof(struct btf_param);
+		break;
+	case BTF_KIND_VAR:
+		extra = sizeof(struct btf_var);
+		break;
+	case BTF_KIND_DATASEC:
+		item_size = sizeof(struct btf_var_secinfo);
+		break;
+	case BTF_KIND_DECL_TAG:
+		extra = sizeof(uint32_t);
+		break;
+	case BTF_KIND_ENUM64:
+		item_size = sizeof(uint32_t) * 3;
+		break;
+	case BTF_KIND_PTR:
+	case BTF_KIND_FWD:
+	case BTF_KIND_TYPEDEF:
+	case BTF_KIND_VOLATILE:
+	case BTF_KIND_CONST:
+	case BTF_KIND_RESTRICT:
+	case BTF_KIND_FUNC:
+	case BTF_KIND_FLOAT:
+	case BTF_KIND_TYPE_TAG:
+		break;
+	default:
+		message("error", "unsupported BTF kind %u", kind);
+		return -EINVAL;
+	}
+
+	if (vlen && item_size > (SIZE_MAX - sizeof(struct btf_type)) / vlen)
+		return -EOVERFLOW;
+	extra += item_size * vlen;
+	if (extra > SIZE_MAX - sizeof(struct btf_type))
+		return -EOVERFLOW;
+	*size = sizeof(struct btf_type) + extra;
+	return 0;
+}
+
+static void resolve_type(struct object *object, enum id_kind kind,
+			 const char *name, uint32_t id)
+{
+	struct id_entry *entry;
+
+	if (!name)
+		return;
+	entry = find_entry(object, kind, name);
+	if (!entry)
+		return;
+	if (entry->id && entry->id != id && verbose)
+		message("warning", "multiple BTF IDs for %s: %u and %u, using %u",
+			name, entry->id, id, entry->id);
+	else if (!entry->id)
+		entry->id = id;
+}
+
+static int resolve_symbols(struct object *object, const void *data, size_t size)
+{
+	struct btf_view view;
+	size_t offset = 0;
+	uint32_t id = 1;
+
+	if (btf_view_init(&view, data, size))
+		return -EINVAL;
+
+	while (offset < view.type_size) {
+		const struct btf_type *type;
+		const char *name;
+		uint32_t name_offset;
+		uint32_t info;
+		uint32_t kind;
+		uint32_t vlen;
+		size_t record_size;
+
+		if (view.type_size - offset < sizeof(*type)) {
+			message("error", "truncated BTF type section");
+			return -EINVAL;
+		}
+
+		type = (const struct btf_type *)(view.types + offset);
+		name_offset = read_le32(&type->name_off);
+		info = read_le32(&type->info);
+		kind = BTF_INFO_KIND(info);
+		vlen = BTF_INFO_VLEN(info);
+		if (btf_record_size(kind, vlen, &record_size) ||
+		    record_size > view.type_size - offset) {
+			message("error", "invalid BTF record %u", id);
+			return -EINVAL;
+		}
+
+		name = btf_string(&view, name_offset);
+		if (kind == BTF_KIND_STRUCT)
+			resolve_type(object, ID_STRUCT, name, id);
+		else if (kind == BTF_KIND_UNION)
+			resolve_type(object, ID_UNION, name, id);
+		else if (kind == BTF_KIND_TYPEDEF)
+			resolve_type(object, ID_TYPEDEF, name, id);
+		else if (kind == BTF_KIND_FUNC)
+			resolve_type(object, ID_FUNC, name, id);
+
+		offset += record_size;
+		id++;
+	}
+
+	if (offset != view.type_size) {
+		message("error", "BTF type section has trailing data");
+		return -EINVAL;
 	}
 	return 0;
 }
 
-static int cmp_id(const void *pa, const void *pb)
+static int compare_ids(const void *left, const void *right)
 {
-	const int *a = pa, *b = pb;
+	const uint32_t *a = left;
+	const uint32_t *b = right;
 
-	return *a - *b;
+	return *a > *b ? 1 : *a < *b ? -1 : 0;
 }
 
-static int sets_patch(struct object *obj)
+static int patch_symbols(struct object *object)
 {
-	Elf_Data *data = obj->efile.idlist;
-	int *ptr = data->d_buf;
-	struct rb_node *next;
+	unsigned char *data = object->ids->d_buf;
+	size_t i;
 
-	next = rb_first(&obj->sets);
-	while (next) {
-		unsigned long addr, idx;
-		struct btf_id *id;
-		int *base;
-		int cnt;
+	for (i = 0; i < object->entry_count; i++) {
+		struct id_entry *entry = &object->entries[i];
+		size_t j;
 
-		id   = rb_entry(next, struct btf_id, rb_node);
-		addr = id->addr[0];
-		idx  = addr - obj->efile.idlist_addr;
+		for (j = 0; j < entry->address_count; j++) {
+			size_t offset = (size_t)entry->addresses[j];
 
-		/* sets are unique */
-		if (id->addr_cnt != 1) {
-			pr_err("FAILED malformed data for set '%s'\n",
-				id->name);
-			return -1;
+			if (offset > object->ids_size - sizeof(uint32_t))
+				return -EINVAL;
+			write_native32(data + offset, entry->id);
 		}
 
-		idx = idx / sizeof(int);
-		base = &ptr[idx] + 1;
-		cnt = ptr[idx];
+		if (entry->kind == ID_SET) {
+			size_t offset = (size_t)entry->addresses[0];
+			size_t count = (size_t)(entry->set_size / sizeof(uint32_t)) - 1;
+			uint32_t *members;
 
-		pr_debug("sorting  addr %5lu: cnt %6d [%s]\n",
-			 (idx + 1) * sizeof(int), cnt, id->name);
-
-		qsort(base, cnt, sizeof(int), cmp_id);
-
-			next = rb_next(next);
+			if (count > (object->ids_size - offset) / sizeof(uint32_t) - 1)
+				return -EINVAL;
+			write_native32(data + offset, (uint32_t)count);
+			members = (uint32_t *)(data + offset + sizeof(uint32_t));
+			qsort(members, count, sizeof(*members), compare_ids);
 		}
 
+		if (!entry->id && entry->kind != ID_SET)
+			message("warning", "unresolved BTF ID: %s", entry->name);
+	}
+
+	object->ids->d_type = ELF_T_WORD;
+	if (!elf_flagdata(object->ids, ELF_C_SET, ELF_F_DIRTY)) {
+		message("error", "cannot mark %s dirty: %s",
+			BTF_IDS_SECTION, elf_errmsg(-1));
+		return -EINVAL;
+	}
+	if (elf_update(object->elf, ELF_C_WRITE) < 0) {
+		message("error", "cannot update ELF: %s", elf_errmsg(-1));
+		return -EINVAL;
+	}
 	return 0;
 }
 
-static int symbols_patch(struct object *obj)
+static void free_object(struct object *object)
 {
-	int err;
+	size_t i;
 
-	if (__symbols_patch(obj, &obj->structs)  ||
-	    __symbols_patch(obj, &obj->unions)   ||
-	    __symbols_patch(obj, &obj->typedefs) ||
-	    __symbols_patch(obj, &obj->funcs)    ||
-	    __symbols_patch(obj, &obj->sets))
-		return -1;
+	for (i = 0; i < object->entry_count; i++) {
+		free(object->entries[i].name);
+		free(object->entries[i].addresses);
+	}
+	free(object->entries);
+	if (object->elf)
+		elf_end(object->elf);
+	if (object->fd >= 0)
+		close(object->fd);
+}
 
-	if (sets_patch(obj))
-		return -1;
+static void usage(const char *program)
+{
+	fprintf(stderr,
+		"usage: %s [--btf FILE] [--no-fail] [-v] ELF\\n",
+		program);
+}
 
-	elf_flagdata(obj->efile.idlist, ELF_C_SET, ELF_F_DIRTY);
+int main(int argc, char **argv)
+{
+	static const struct option options[] = {
+		{ "btf", required_argument, NULL, 'b' },
+		{ "no-fail", no_argument, NULL, 'n' },
+		{ "verbose", no_argument, NULL, 'v' },
+		{ NULL, 0, NULL, 0 },
+	};
+	struct object object = {
+		.fd = -1,
+	};
+	unsigned char *external_btf = NULL;
+	size_t external_btf_size = 0;
+	const char *btf_path = NULL;
+	int no_fail = 0;
+	int option;
+	int ret = 1;
 
-	err = elf_update(obj->efile.elf, ELF_C_WRITE);
-	if (err < 0) {
-		pr_err("FAILED elf_update(WRITE): %s\n",
+	while ((option = getopt_long(argc, argv, "b:nv", options, NULL)) != -1) {
+		switch (option) {
+		case 'b':
+			btf_path = optarg;
+			break;
+		case 'n':
+			no_fail = 1;
+			break;
+		case 'v':
+			verbose++;
+			break;
+		default:
+			usage(argv[0]);
+			return 2;
+		}
+	}
+	if (optind != argc - 1) {
+		usage(argv[0]);
+		return 2;
+	}
+
+	object.path = argv[optind];
+	if (elf_version(EV_CURRENT) == EV_NONE) {
+		message("error", "libelf initialization failed");
+		goto out;
+	}
+
+	object.fd = open(object.path, O_RDWR);
+	if (object.fd < 0) {
+		message("error", "cannot open %s: %s",
+			object.path, strerror(errno));
+		goto out;
+	}
+	object.elf = elf_begin(object.fd, ELF_C_RDWR, NULL);
+	if (!object.elf) {
+		message("error", "cannot create ELF descriptor: %s",
 			elf_errmsg(-1));
+		goto out;
+	}
+	if (elf_kind(object.elf) != ELF_K_ELF) {
+		message("error", "%s is not an ELF file", object.path);
+		goto out;
+	}
+	elf_flagelf(object.elf, ELF_C_SET, ELF_F_LAYOUT);
+
+	if (collect_sections(&object))
+		goto out;
+	if (!object.ids) {
+		if (no_fail) {
+			ret = 0;
+			goto out;
+		}
+		message("error", "ELF is missing %s", BTF_IDS_SECTION);
+		goto out;
+	}
+	if (collect_symbols(&object))
+		goto out;
+
+	if (btf_path) {
+		if (load_file(btf_path, &external_btf, &external_btf_size))
+			goto out;
+		object.btf = NULL;
 	}
 
-	pr_debug("update %s for %s\n",
-		 err >= 0 ? "ok" : "failed", obj->path);
-	return err < 0 ? -1 : 0;
-}
-
-static const char * const resolve_btfids_usage[] = {
-	"resolve_btfids [<options>] <ELF object>",
-	NULL
-};
-
-int main(int argc, const char **argv)
-{
-	bool no_fail = false;
-	struct object obj = {
-		.efile = {
-			.idlist_shndx  = -1,
-			.symbols_shndx = -1,
-		},
-		.structs  = RB_ROOT,
-		.unions   = RB_ROOT,
-		.typedefs = RB_ROOT,
-		.funcs    = RB_ROOT,
-		.sets     = RB_ROOT,
-	};
-	struct option btfid_options[] = {
-		OPT_INCR('v', "verbose", &verbose,
-			 "be more verbose (show errors, etc)"),
-		OPT_STRING(0, "btf", &obj.btf, "BTF data",
-			   "BTF data"),
-		OPT_BOOLEAN(0, "no-fail", &no_fail,
-			   "do not fail if " BTF_IDS_SECTION " section is not found"),
-		OPT_END()
-	};
-	int err = -1;
-
-	argc = parse_options(argc, argv, btfid_options, resolve_btfids_usage,
-			     PARSE_OPT_STOP_AT_NON_OPTION);
-	if (argc != 1)
-		usage_with_options(resolve_btfids_usage, btfid_options);
-
-	obj.path = argv[0];
-
-	if (elf_collect(&obj))
+	if (!object.btf && !external_btf) {
+		if (no_fail) {
+			ret = 0;
+			goto out;
+		}
+		message("error", "ELF is missing %s", BTF_SECTION);
 		goto out;
-
-	/*
-	 * We did not find .BTF_ids section or symbols section,
-	 * nothing to do..
-	 */
-	if (obj.efile.idlist_shndx == -1 ||
-	    obj.efile.symbols_shndx == -1) {
-		if (no_fail)
-			return 0;
-		pr_err("FAILED to find needed sections\n");
-		return -1;
 	}
-
-	if (symbols_collect(&obj))
+	if (resolve_symbols(&object,
+			    external_btf ? external_btf : object.btf->d_buf,
+			    external_btf ? external_btf_size : object.btf->d_size))
+		goto out;
+	if (patch_symbols(&object))
 		goto out;
 
-	if (symbols_resolve(&obj))
-		goto out;
-
-	if (symbols_patch(&obj))
-		goto out;
-
-	err = 0;
+	ret = 0;
 out:
-	if (obj.efile.elf)
-		elf_end(obj.efile.elf);
-	close(obj.efile.fd);
-	return err;
+	free(external_btf);
+	free_object(&object);
+	return ret;
 }
