@@ -100,6 +100,14 @@
 #define A64_STXR(sf, Rt, Rn, Rs) \
 	A64_LSX(sf, Rt, Rn, Rs, STORE_EX)
 
+/* Store-release exclusive.  The old arm64 instruction helpers expose only
+ * STXR; STLXR has the same encoding with bit 15 set. */
+#define A64_STLXR(sf, Rt, Rn, Rs) \
+	(A64_LSX(sf, Rt, Rn, Rs, STORE_EX) | 0x00008000)
+
+/* Data memory barrier, inner-shareable domain. */
+#define A64_DMB_ISH	0xd5033bbf
+
 /* LSE atomics */
 #define A64_STADD(sf, Rn, Rs) \
 	aarch64_insn_gen_stadd(Rn, Rs, A64_SIZE(sf))
