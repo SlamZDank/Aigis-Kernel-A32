@@ -584,6 +584,7 @@ struct stm_ts_data {
 	struct notifier_block vbus_nb;
 #endif	
 	struct notifier_block stm_input_nb;
+	struct notifier_block smcdsd_nb;
 	struct delayed_work work_print_info;
 	struct delayed_work work_read_functions;
 	struct delayed_work reset_work;

@@ -9,6 +9,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/fb.h>
+#include "../../../misc/mediatek/lcm/inc/smcdsd_notify.h"
 #include "stm_dev.h"
 #include "stm_reg.h"
 
@@ -1449,6 +1451,44 @@ static struct attribute_group secure_attr_group = {
 };
 #endif
 
+static int stm_ts_smcdsd_notifier_callback(struct notifier_block *self,
+                                       unsigned long event, void *data)
+{
+       struct stm_ts_data *ts = container_of(self, struct stm_ts_data, smcdsd_nb);
+       struct fb_event *evdata = data;
+       int fb_blank;
+
+       if (!ts || !ts->probe_done || !ts->plat_data || !ts->plat_data->input_dev)
+               return NOTIFY_DONE;
+
+       if (event == SMCDSD_EVENT_DOZE || event == SMCDSD_EARLY_EVENT_DOZE) {
+               input_info(true, &ts->client->dev, "%s: DOZE (AOD) event %02lx -> disable tsp (enabled=0)\n",
+                               __func__, event);
+               ts->plat_data->display_state = DISPLAY_STATE_DOZE;
+               if (ts->plat_data->enabled)
+                       sec_input_disable_device(ts->plat_data->input_dev);
+       } else if (event == SMCDSD_EVENT_BLANK) {
+               if (evdata && evdata->data) {
+                       fb_blank = *(int *)evdata->data;
+                       if (fb_blank == FB_BLANK_UNBLANK) {
+                               input_info(true, &ts->client->dev, "%s: UNBLANK -> enable tsp (enabled=1)\n",
+                                               __func__);
+                               ts->plat_data->display_state = DISPLAY_STATE_ON;
+                               if (!ts->plat_data->enabled)
+                                       sec_input_enable_device(ts->plat_data->input_dev);
+                       } else if (fb_blank == FB_BLANK_POWERDOWN) {
+                               input_info(true, &ts->client->dev, "%s: POWERDOWN -> disable tsp (enabled=0)\n",
+                                               __func__);
+                               ts->plat_data->display_state = DISPLAY_STATE_OFF;
+                               if (ts->plat_data->enabled)
+                                       sec_input_disable_device(ts->plat_data->input_dev);
+                       }
+               }
+       }
+
+       return NOTIFY_DONE;
+}
+
 #if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
 static int stm_touch_notify_call(struct notifier_block *n, unsigned long data, void *v)
 {
@@ -1690,14 +1730,33 @@ static void stm_ts_gesture_event(struct stm_ts_data *ts, u8 *event_buff)
 		if (p_gesture_status->gesture_id == STM_TS_SPONGE_EVENT_GESTURE_ID_FOD_LONG ||
 			p_gesture_status->gesture_id == STM_TS_SPONGE_EVENT_GESTURE_ID_FOD_NORMAL) {
 			sec_input_gesture_report(&ts->client->dev, SPONGE_EVENT_TYPE_FOD_PRESS, x, y);
+            input_mt_slot(ts->plat_data->input_dev, 0);
+            input_mt_report_slot_state(ts->plat_data->input_dev, MT_TOOL_FINGER, 1);
+            input_report_key(ts->plat_data->input_dev, BTN_TOUCH, 1);
+            input_report_key(ts->plat_data->input_dev, BTN_TOOL_FINGER, 1);
+            input_report_abs(ts->plat_data->input_dev, ABS_MT_POSITION_X, x);
+            input_report_abs(ts->plat_data->input_dev, ABS_MT_POSITION_Y, y);
+            input_report_abs(ts->plat_data->input_dev, ABS_MT_TOUCH_MAJOR, 30);
+            input_report_abs(ts->plat_data->input_dev, ABS_MT_TOUCH_MINOR, 30);
+            input_sync(ts->plat_data->input_dev);
 			input_info(true, &ts->client->dev, "%s: FOD %sPRESS\n",
 					__func__, p_gesture_status->gesture_id ? "" : "LONG");
 		} else if (p_gesture_status->gesture_id == STM_TS_SPONGE_EVENT_GESTURE_ID_FOD_RELEASE) {
 			sec_input_gesture_report(&ts->client->dev, SPONGE_EVENT_TYPE_FOD_RELEASE, x, y);
+            input_mt_slot(ts->plat_data->input_dev, 0);
+            input_mt_report_slot_state(ts->plat_data->input_dev, MT_TOOL_FINGER, 0);
+            input_report_key(ts->plat_data->input_dev, BTN_TOUCH, 0);
+            input_report_key(ts->plat_data->input_dev, BTN_TOOL_FINGER, 0);
+            input_sync(ts->plat_data->input_dev);
 			input_info(true, &ts->client->dev, "%s: FOD RELEASE\n", __func__);
 			memset(ts->plat_data->fod_data.vi_data, 0x0, ts->plat_data->fod_data.vi_size);
 		} else if (p_gesture_status->gesture_id == STM_TS_SPONGE_EVENT_GESTURE_ID_FOD_OUT) {
 			sec_input_gesture_report(&ts->client->dev, SPONGE_EVENT_TYPE_FOD_OUT, x, y);
+            input_mt_slot(ts->plat_data->input_dev, 0);
+            input_mt_report_slot_state(ts->plat_data->input_dev, MT_TOOL_FINGER, 0);
+            input_report_key(ts->plat_data->input_dev, BTN_TOUCH, 0);
+            input_report_key(ts->plat_data->input_dev, BTN_TOOL_FINGER, 0);
+            input_sync(ts->plat_data->input_dev);
 			input_info(true, &ts->client->dev, "%s: FOD OUT\n", __func__);
 		} else if (p_gesture_status->gesture_id == STM_TS_SPONGE_EVENT_GESTURE_ID_FOD_VI) {
 			if ((ts->plat_data->lowpower_mode & SEC_TS_MODE_SPONGE_PRESS) && ts->plat_data->support_fod_lp_mode)
@@ -2730,6 +2789,9 @@ void stm_ts_release(struct stm_ts_data *ts)
 		hall_notifier_unregister(&ts->hall_ic_nb);
 #endif
 
+    if (ts->smcdsd_nb.notifier_call)
+        smcdsd_unregister_notifier(&ts->smcdsd_nb);
+
 	cancel_delayed_work_sync(&ts->work_read_info);
 	cancel_delayed_work_sync(&ts->work_print_info);
 	cancel_delayed_work_sync(&ts->work_read_functions);
@@ -2818,6 +2880,11 @@ int stm_ts_probe(struct stm_ts_data *ts)
 	vbus_notifier_register(&ts->vbus_nb, stm_ts_vbus_notification,
 						VBUS_NOTIFY_DEV_CHARGER);
 #endif
+
+    ts->smcdsd_nb.priority = 1;
+    ts->smcdsd_nb.notifier_call = stm_ts_smcdsd_notifier_callback;
+    smcdsd_register_notifier(&ts->smcdsd_nb);
+    input_info(true, &ts->client->dev, "%s: smcdsd notifier register\n", __func__);
 
 	input_err(true, &ts->client->dev, "%s: done\n", __func__);
 #ifdef ENABLE_RAWDATA_SERVICE
