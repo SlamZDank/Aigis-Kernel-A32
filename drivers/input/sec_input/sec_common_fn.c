@@ -1756,6 +1756,11 @@ __visible_for_testing ssize_t sec_input_enabled_store(struct device *dev,
 		goto out;
 	}
 
+    if (enable && pdata->display_state == DISPLAY_STATE_DOZE) {
+            pr_info("%s %s: ignoring enable while in DOZE (AOD) mode\n", SECLOG, __func__);
+            goto out;
+    }
+
 	if (enable)
 		ret = sec_input_enable_device(input_dev);
 	else
