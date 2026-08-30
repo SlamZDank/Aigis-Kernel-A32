@@ -27,7 +27,7 @@ env:
 
 jobs:
   build:
-    name: Build A32 kernel
+    name: Build A325F Kernel
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -174,7 +174,7 @@ jobs:
           echo "Toolchain     : $TOOLCHAIN"
           df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" | head -n 10 || true
 
-      - name: Build kernel (a32_slamzdank_defconfig)
+      - name: Build kernel
         shell: bash
         run: |
           set -euo pipefail
@@ -220,7 +220,7 @@ jobs:
           echo "Image size: $(stat -c%s "$OUT_DIR/arch/arm64/boot/Image") bytes"
           file "$OUT_DIR/arch/arm64/boot/Image"
 
-      - name: Package AnyKernel ZIP (Image only)
+      - name: Package AnyKernel ZIP
         shell: bash
         run: |
           set -euo pipefail
@@ -239,7 +239,7 @@ jobs:
           # Create ZIP name with short sha and date
           SHORT_SHA="$(git rev-parse --short=8 HEAD)"
           DATE="$(date +%Y%m%d)"
-          ZIP_NAME="A32-SlamZDank-Kernel-${DATE}-${SHORT_SHA}.zip"
+          ZIP_NAME="A32-Aigis-Kernel-${DATE}-${SHORT_SHA}.zip"
           ZIP_PATH="$GITHUB_WORKSPACE/$ZIP_NAME"
 
           echo "Creating AnyKernel ZIP: $ZIP_NAME"
@@ -255,20 +255,26 @@ jobs:
           # Quick verify Image inside zip
           unzip -p "$ZIP_PATH" "Image" > /dev/null && echo "Image verified inside zip"
 
-          # Generate SHA256
-          (cd "$GITHUB_WORKSPACE" && sha256sum "$ZIP_NAME" | tee SHA256SUMS.txt)
+          # Generate SHA256 (hash of Image for single-unzip verification)
+          # Keep ZIP for reference (generated inner zip), but artifact is AnyKernel dir itself
+          sha256sum "$AK_DIR/Image" | tee "$GITHUB_WORKSPACE/SHA256SUMS.txt"
+          echo "# ZIP reference hash (inner zip, not uploaded as artifact):" >> "$GITHUB_WORKSPACE/SHA256SUMS.txt"
+          sha256sum "$ZIP_PATH" >> "$GITHUB_WORKSPACE/SHA256SUMS.txt" || true
           cat "$GITHUB_WORKSPACE/SHA256SUMS.txt"
 
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
           echo "ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
 
-      - name: Upload build artifact
+      - name: Upload AnyKernel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ env.ZIP_NAME }}
-          path: |
-            ${{ env.ZIP_PATH }}
-            ${{ github.workspace }}/SHA256SUMS.txt
-            ${{ env.OUT_DIR }}/arch/arm64/boot/Image
+          name: anykernel-${{ env.ZIP_NAME }}
+          path: ${{ github.workspace }}/AnyKernel
           if-no-files-found: error
-          retention-days: 14
+
+      - name: Upload SHA256SUM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256sum-${{ env.ZIP_NAME }}
+          path: ${{ github.workspace }}/SHA256SUMS.txt
+          if-no-files-found: error
