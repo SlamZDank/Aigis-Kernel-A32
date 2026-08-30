@@ -15,7 +15,6 @@ concurrency:
 jobs:
   update-kernelsu:
     runs-on: ubuntu-latest
-    # Only run schedule on bpf-5.10-phoenix; allow manual dispatch from any branch
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/bpf-5.10-phoenix'
     steps:
       - name: Checkout bpf-5.10-phoenix

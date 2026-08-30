@@ -1,0 +1,274 @@
+name: Build Kernel
+
+on:
+  push:
+    branches:
+      - bpf-5.10-phoenix
+      - common
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - bpf-5.10-phoenix
+      - common
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-kernel-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OUT_DIR: ${{ github.workspace }}/out
+  TOOLCHAIN_REPO: ZyCromerZ/Clang
+  TOOLCHAIN_RELEASE: 14.0.6-20260619-release
+
+jobs:
+  build:
+    name: Build A32 kernel
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout kernel and submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Restore full submodule history and tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule foreach --recursive '
+            if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+              git fetch --unshallow --tags --force
+            else
+              git fetch --tags --force
+            fi
+          '
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ca-certificates curl file flex git \
+            libelf-dev libssl-dev libncurses-dev jq lz4 pahole python3 unzip xz-utils zip zlib1g-dev zstd
+          echo "pahole: $(command -v pahole)"
+          pahole --version || true
+
+      - name: Cache ZyC toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/zyc-clang
+          key: zyc-clang-${{ env.TOOLCHAIN_REPO }}-${{ env.TOOLCHAIN_RELEASE }}
+          restore-keys: |
+            zyc-clang-${{ env.TOOLCHAIN_REPO }}-
+
+      - name: Download ZyC toolchain
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/zyc-release.json"
+          unpack="${{ runner.temp }}/zyc-clang"
+          rm -rf "$unpack"
+          mkdir -p "$unpack"
+          api="https://api.github.com/repos/${TOOLCHAIN_REPO}/releases/tags/${TOOLCHAIN_RELEASE}"
+          echo "Resolving ZyC release assets: ${TOOLCHAIN_REPO}@${TOOLCHAIN_RELEASE}"
+          if ! curl --fail --location --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "$api" -o "$release_json"; then
+            echo "::warning::Authenticated release lookup failed; retrying without auth."
+            curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors \
+              -H "Accept: application/vnd.github+json" \
+              "$api" -o "$release_json"
+          fi
+          echo "Release assets:"
+          jq -r '.assets[] | "  \(.name)  \(.size) bytes"' "$release_json"
+          asset_name="$(
+            jq -r '
+              [.assets[]
+               | select(
+                   (.name | ascii_downcase | endswith(".tar.gz")) or
+                   (.name | ascii_downcase | endswith(".tgz")) or
+                   (.name | ascii_downcase | endswith(".tar.xz")) or
+                   (.name | ascii_downcase | endswith(".txz")) or
+                   (.name | ascii_downcase | endswith(".tar.zst")) or
+                   (.name | ascii_downcase | endswith(".tzst")) or
+                   (.name | ascii_downcase | endswith(".zip"))
+                 )]
+              | sort_by(.size)
+              | reverse
+              | .[0].name // empty
+            ' "$release_json"
+          )"
+          asset_url="$(
+            jq -r --arg name "$asset_name" \
+              '.assets[] | select(.name == $name) | .browser_download_url' \
+              "$release_json"
+          )"
+          if [ -z "$asset_name" ] || [ -z "$asset_url" ]; then
+            echo "::error::No toolchain archive asset found in ZyC release."
+            exit 1
+          fi
+          echo "Selected toolchain asset: $asset_name"
+          archive="$RUNNER_TEMP/$asset_name"
+          echo "Downloading asset: $asset_name"
+          curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors \
+            "$asset_url" -o "$archive"
+          ls -lh "$archive"
+          file "$archive"
+          case "$asset_name" in
+            *.zip)
+              unzip -q "$archive" -d "$unpack"
+              ;;
+            *.tar.zst|*.tzst)
+              tar --zstd --no-same-owner -xf "$archive" -C "$unpack"
+              ;;
+            *)
+              tar --no-same-owner -xf "$archive" -C "$unpack"
+              ;;
+          esac
+          echo "Extracted to $unpack"
+          find "$unpack" -maxdepth 3 -type d -print | head -n 20
+
+      - name: Export toolchain to PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          unpack="${{ runner.temp }}/zyc-clang"
+          clang_bin="$(find "$unpack" -path '*/bin/clang' -print -quit)"
+          if [ -z "$clang_bin" ]; then
+            echo "::error::Could not find bin/clang under $unpack"
+            find "$unpack" -maxdepth 5 -type f -name 'clang*' -print | head -n 20
+            exit 1
+          fi
+          echo "Found clang: $clang_bin"
+          clang_real="$(readlink -f "$clang_bin")"
+          toolchain="$(dirname "$(dirname "$clang_bin")")"
+          echo "TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+          echo "$toolchain/bin" >> "$GITHUB_PATH"
+          echo "Resolved toolchain: $toolchain"
+          "$clang_real" --version | head -n 2
+          "$toolchain/bin/ld.lld" --version | head -n 1
+          echo "Toolchain contents:"
+          ls -lh "$toolchain/bin" | head -n 20
+
+      - name: Show build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Kernel commit : $(git rev-parse HEAD)"
+          echo "Kernel branch : ${GITHUB_REF_NAME:-local}"
+          echo "KernelSU SHA  : $(git -C KernelSU rev-parse HEAD 2>/dev/null || echo 'n/a')"
+          echo "NoMount SHA   : $(git -C NoMount rev-parse HEAD 2>/dev/null || echo 'n/a')"
+          echo "Toolchain     : $TOOLCHAIN"
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" | head -n 10
+
+      - name: Build kernel (a32_slamzdank_defconfig)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ARCH=arm64
+          export ANDROID_MAJOR_VERSION=r
+          export CROSS_COMPILE="$TOOLCHAIN/bin/aarch64-linux-gnu-"
+          export CROSS_COMPILE_ARM32="$TOOLCHAIN/bin/arm-linux-gnueabi-"
+          export CC="$TOOLCHAIN/bin/clang"
+          export LD="$TOOLCHAIN/bin/ld.lld"
+          export OBJCOPY="$TOOLCHAIN/bin/llvm-objcopy"
+          export AS="$TOOLCHAIN/bin/llvm-as"
+          export NM="$TOOLCHAIN/bin/llvm-nm"
+          export STRIP="$TOOLCHAIN/bin/llvm-strip"
+          export OBJDUMP="$TOOLCHAIN/bin/llvm-objdump"
+          export READELF="$TOOLCHAIN/bin/llvm-readelf"
+          export KCFLAGS=' -w -pipe -O3'
+          export KCPPFLAGS=' -O3'
+          export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+
+          echo "Cleaning previous out..."
+          make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" clean -j$(nproc) || true
+          make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" mrproper -j$(nproc) || true
+
+          echo "Defconfig: a32_slamzdank_defconfig"
+          make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" -j$(nproc) a32_slamzdank_defconfig
+
+          echo "Building kernel..."
+          make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" -j$(nproc) \
+            KCFLAGS=' -w -pipe -O3' \
+            CONFIG_SECTION_MISMATCH_WARN_ONLY=y 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+          echo "Build completed"
+          ls -lh "$OUT_DIR/arch/arm64/boot/" || true
+
+      - name: Verify Image
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking Image..."
+          test -s "$OUT_DIR/arch/arm64/boot/Image"
+          ls -lh "$OUT_DIR/arch/arm64/boot/Image"
+          sha256sum "$OUT_DIR/arch/arm64/boot/Image" | tee "$RUNNER_TEMP/image.sha256"
+          echo "Image size: $(stat -c%s "$OUT_DIR/arch/arm64/boot/Image") bytes"
+          file "$OUT_DIR/arch/arm64/boot/Image"
+
+      - name: Package AnyKernel ZIP (Image only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Use local AnyKernel/ as requested
+          AK_DIR="$GITHUB_WORKSPACE/AnyKernel"
+          test -d "$AK_DIR"
+          test -f "$AK_DIR/anykernel.sh"
+
+          # Clean previous Image in AnyKernel if any
+          rm -f "$AK_DIR/Image" "$AK_DIR/Image.gz" "$AK_DIR/dtbo.img" 2>/dev/null || true
+
+          # Copy only Image as requested
+          cp -v "$OUT_DIR/arch/arm64/boot/Image" "$AK_DIR/Image"
+          ls -lh "$AK_DIR/Image"
+
+          # Create ZIP name with short sha and date
+          SHORT_SHA="$(git rev-parse --short=8 HEAD)"
+          DATE="$(date +%Y%m%d)"
+          ZIP_NAME="A32-SlamZDank-Kernel-${DATE}-${SHORT_SHA}.zip"
+          ZIP_PATH="$GITHUB_WORKSPACE/$ZIP_NAME"
+
+          echo "Creating AnyKernel ZIP: $ZIP_NAME"
+          # Zip contents of AnyKernel (not the directory itself) for flashable zip
+          (
+            cd "$AK_DIR"
+            zip -r9 "$ZIP_PATH" . -x ".git/*" ".github/*" "README.md"
+          )
+
+          echo "Zip created: $ZIP_PATH"
+          ls -lh "$ZIP_PATH"
+          unzip -l "$ZIP_PATH" | head -n 40
+          # Quick verify Image inside zip
+          unzip -p "$ZIP_PATH" "Image" > /dev/null && echo "Image verified inside zip"
+
+          # Generate SHA256
+          (cd "$GITHUB_WORKSPACE" && sha256sum "$ZIP_NAME" | tee SHA256SUMS.txt)
+          cat "$GITHUB_WORKSPACE/SHA256SUMS.txt"
+
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+          echo "ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ env.ZIP_NAME }}
+          path: |
+            ${{ env.ZIP_PATH }}
+            ${{ github.workspace }}/SHA256SUMS.txt
+            ${{ env.OUT_DIR }}/arch/arm64/boot/Image
+          if-no-files-found: error
+          retention-days: 14
