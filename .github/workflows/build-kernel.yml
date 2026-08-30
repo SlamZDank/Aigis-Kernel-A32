@@ -268,7 +268,7 @@ jobs:
       - name: Upload AnyKernel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: anykernel-${{ env.ZIP_NAME }}
+          name: CI-${{ env.ZIP_NAME }}
           path: ${{ github.workspace }}/AnyKernel
           if-no-files-found: error
 
