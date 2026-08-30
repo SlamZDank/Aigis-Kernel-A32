@@ -26,22 +26,38 @@ jobs:
 
       - name: Update NoMount via setup.sh
         run: |
-          curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh | bash -
+          set -euo pipefail
+          # Ensure submodule is initialized (checkout uses submodules: false)
+          git submodule update --init --depth 1 NoMount || git clone https://github.com/maxsteeel/nomount NoMount
+          # Handle shallow clones like build-kernel.yml does
+          if [ "$(git -C NoMount rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
+            git -C NoMount fetch --unshallow --tags --prune --force origin dev master
+          else
+            git -C NoMount fetch --tags --prune --force origin dev master
+          fi
+          git -C NoMount checkout -B dev origin/dev
+          git -C NoMount reset --hard origin/dev
+          echo "NoMount now $(git -C NoMount rev-parse --short HEAD) origin $(git -C NoMount rev-parse --short origin/dev)"
+          # Keep upstream setup.sh for symlink/Makefile/Kconfig idempotency
+          curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh | bash - || true
 
       - name: Detect changes
         id: diff
         run: |
           git status --porcelain
           echo "=== git diff ==="
-          git diff --stat || true
+          git diff --stat --ignore-submodules=none || true
           echo "=== git diff --cached ==="
           git diff --cached --stat || true
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No changes detected."
-          else
+          NOMOUNT_HEAD=$(git -C NoMount rev-parse HEAD 2>/dev/null || echo "unknown")
+          NOMOUNT_INDEX=$(git rev-parse HEAD:NoMount 2>/dev/null || echo "unknown")
+          echo "NOMOUNT_INDEX=$NOMOUNT_INDEX NOMOUNT_HEAD=$NOMOUNT_HEAD"
+          if [ "$NOMOUNT_HEAD" != "$NOMOUNT_INDEX" ] || ! git diff --quiet --ignore-submodules=none || ! git diff --cached --quiet; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Changes detected."
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
           fi
 
       - name: Commit and push if changed
