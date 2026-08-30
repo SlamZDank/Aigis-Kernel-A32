@@ -26,22 +26,38 @@ jobs:
 
       - name: Update KernelSU via setup.sh
         run: |
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -
+          set -euo pipefail
+          # Ensure submodule is initialized (checkout uses submodules: false)
+          git submodule update --init --depth 1 KernelSU || git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
+          # Handle shallow clones like build-kernel.yml does
+          if [ "$(git -C KernelSU rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
+            git -C KernelSU fetch --unshallow --tags --prune --force origin main
+          else
+            git -C KernelSU fetch --tags --prune --force origin main
+          fi
+          git -C KernelSU checkout -B main origin/main
+          git -C KernelSU reset --hard origin/main
+          echo "KSU now $(git -C KernelSU rev-parse --short HEAD) origin $(git -C KernelSU rev-parse --short origin/main)"
+          # Keep upstream setup.sh for symlink/Makefile/Kconfig idempotency
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash - || true
 
       - name: Detect changes
         id: diff
         run: |
           git status --porcelain
           echo "=== git diff ==="
-          git diff --stat || true
+          git diff --stat --ignore-submodules=none || true
           echo "=== git diff --cached ==="
           git diff --cached --stat || true
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No changes detected."
-          else
+          KSU_HEAD=$(git -C KernelSU rev-parse HEAD 2>/dev/null || echo "unknown")
+          KSU_INDEX=$(git rev-parse HEAD:KernelSU 2>/dev/null || echo "unknown")
+          echo "KSU_INDEX=$KSU_INDEX KSU_HEAD=$KSU_HEAD"
+          if [ "$KSU_HEAD" != "$KSU_INDEX" ] || ! git diff --quiet --ignore-submodules=none || ! git diff --cached --quiet; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Changes detected."
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
           fi
 
       - name: Commit and push if changed
