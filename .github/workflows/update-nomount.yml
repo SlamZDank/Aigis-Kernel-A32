@@ -31,9 +31,10 @@ jobs:
           git submodule update --init --depth 1 NoMount || git clone https://github.com/maxsteeel/nomount NoMount
           # Handle shallow clones like build-kernel.yml does
           if [ "$(git -C NoMount rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
-            git -C NoMount fetch --unshallow --tags --prune --force origin dev master
+            git -C NoMount fetch --unshallow --tags --prune --force
+            git -C NoMount fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
           else
-            git -C NoMount fetch --tags --prune --force origin dev master
+            git -C NoMount fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
           fi
           git -C NoMount checkout -B dev origin/dev
           git -C NoMount reset --hard origin/dev
