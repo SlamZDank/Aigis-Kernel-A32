@@ -1,0 +1,65 @@
+name: Update NoMount
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-nomount
+  cancel-in-progress: false
+
+jobs:
+  update-nomount:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/bpf-5.10-phoenix'
+    steps:
+      - name: Checkout bpf-5.10-phoenix
+        uses: actions/checkout@v4
+        with:
+          ref: bpf-5.10-phoenix
+          fetch-depth: 0
+          submodules: false
+
+      - name: Update NoMount via setup.sh
+        run: |
+          curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh | bash -
+
+      - name: Detect changes
+        id: diff
+        run: |
+          git status --porcelain
+          echo "=== git diff ==="
+          git diff --stat || true
+          echo "=== git diff --cached ==="
+          git diff --cached --stat || true
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changes detected."
+          fi
+
+      - name: Commit and push if changed
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage gitlink + files modified by setup.sh (fs/nomount symlink, Makefile, Kconfig)
+          git add NoMount || true
+          git add fs/Makefile fs/Kconfig || true
+          git add fs/nomount || true
+
+          git status
+          git diff --cached --stat
+
+          NOMOUNT_SHA=$(git -C NoMount rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          git commit -m "chore: bump NoMount to ${NOMOUNT_SHA} [skip ci]" || echo "nothing to commit"
+
+          git pull --rebase origin bpf-5.10-phoenix || true
+          git push origin HEAD:bpf-5.10-phoenix || (git pull --rebase origin bpf-5.10-phoenix && git push origin HEAD:bpf-5.10-phoenix)
