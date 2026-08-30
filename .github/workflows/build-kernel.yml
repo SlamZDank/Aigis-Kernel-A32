@@ -139,7 +139,7 @@ jobs:
               ;;
           esac
           echo "Extracted to $unpack"
-          find "$unpack" -maxdepth 3 -type d -print | head -n 20
+          find "$unpack" -maxdepth 3 -type d -print | head -n 20 || true
 
       - name: Export toolchain to PATH
         shell: bash
@@ -149,7 +149,7 @@ jobs:
           clang_bin="$(find "$unpack" -path '*/bin/clang' -print -quit)"
           if [ -z "$clang_bin" ]; then
             echo "::error::Could not find bin/clang under $unpack"
-            find "$unpack" -maxdepth 5 -type f -name 'clang*' -print | head -n 20
+            find "$unpack" -maxdepth 5 -type f -name 'clang*' -print | head -n 20 || true
             exit 1
           fi
           echo "Found clang: $clang_bin"
@@ -158,10 +158,10 @@ jobs:
           echo "TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
           echo "$toolchain/bin" >> "$GITHUB_PATH"
           echo "Resolved toolchain: $toolchain"
-          "$clang_real" --version | head -n 2
+          "$clang_real" --version | head -n 2 || true
           "$toolchain/bin/ld.lld" --version | head -n 1
           echo "Toolchain contents:"
-          ls -lh "$toolchain/bin" | head -n 20
+          ls -lh "$toolchain/bin" | head -n 20 || true
 
       - name: Show build metadata
         shell: bash
@@ -172,7 +172,7 @@ jobs:
           echo "KernelSU SHA  : $(git -C KernelSU rev-parse HEAD 2>/dev/null || echo 'n/a')"
           echo "NoMount SHA   : $(git -C NoMount rev-parse HEAD 2>/dev/null || echo 'n/a')"
           echo "Toolchain     : $TOOLCHAIN"
-          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" | head -n 10
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" | head -n 10 || true
 
       - name: Build kernel (a32_slamzdank_defconfig)
         shell: bash
@@ -251,7 +251,7 @@ jobs:
 
           echo "Zip created: $ZIP_PATH"
           ls -lh "$ZIP_PATH"
-          unzip -l "$ZIP_PATH" | head -n 40
+          unzip -l "$ZIP_PATH" | head -n 40 || true
           # Quick verify Image inside zip
           unzip -p "$ZIP_PATH" "Image" > /dev/null && echo "Image verified inside zip"
 
