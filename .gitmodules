@@ -5,4 +5,4 @@
 [submodule "NoMount"]
 	path = NoMount
 	url = https://github.com/maxsteeel/nomount
-	branch = dev
+	branch = master

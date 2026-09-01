@@ -45,11 +45,11 @@ jobs:
           else
             git -C NoMount fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
           fi
-          git -C NoMount checkout -B dev origin/dev
-          git -C NoMount reset --hard origin/dev
-          echo "NoMount now $(git -C NoMount rev-parse --short HEAD) origin $(git -C NoMount rev-parse --short origin/dev)"
+          git -C NoMount checkout -B master origin/master
+          git -C NoMount reset --hard origin/master
+          echo "NoMount now $(git -C NoMount rev-parse --short HEAD) origin $(git -C NoMount rev-parse --short origin/master)"
           # Keep upstream setup.sh for symlink/Makefile/Kconfig idempotency
-          curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh | bash - || true
+          curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash - || true
 
       - name: Detect changes
         id: diff
