@@ -47,13 +47,15 @@ jobs:
           echo "SUB=$SUB URL=$URL UPSTREAM=$UPSTREAM SETUP_URL=$SETUP_URL ARGS=$SETUP_ARGS"
 
           # Ensure submodule is initialized (checkout uses submodules: false)
-          git submodule update --init --depth 1 "$SUB" || git clone "$URL" "$SUB"
+          git submodule sync --recursive || true
+          git submodule update --init --depth 1 "$SUB" || git clone --depth 1 --branch "$UPSTREAM" "$URL" "$SUB" || git clone "$URL" "$SUB"
 
-          # Handle shallow clones like build-kernel.yml does
+          # Handle shallow clones like build-kernel.yml does - use wildcard refspec to ensure origin/<branch> exists (FETCH_HEAD alone is not enough)
           if [ "$(git -C "$SUB" rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
-            git -C "$SUB" fetch --unshallow --tags --prune --force origin "$UPSTREAM"
+            git -C "$SUB" fetch --unshallow --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*' || \
+            git -C "$SUB" fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
           else
-            git -C "$SUB" fetch --tags --prune --force origin "$UPSTREAM"
+            git -C "$SUB" fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
           fi
           git -C "$SUB" checkout -B "$UPSTREAM" "origin/$UPSTREAM"
           git -C "$SUB" reset --hard "origin/$UPSTREAM"
