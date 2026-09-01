@@ -8,30 +8,39 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: update-nomount
-  cancel-in-progress: false
-
 jobs:
   update-nomount:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: resukisu
+            ref: main-resuki
+          - variant: ksunext
+            ref: main-ksun
+    name: Update NoMount (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/bpf-5.10-phoenix'
+    concurrency:
+      group: update-nomount-${{ matrix.ref }}
+      cancel-in-progress: false
     steps:
-      - name: Checkout bpf-5.10-phoenix
+      - name: Checkout ${{ matrix.ref }}
         uses: actions/checkout@v4
         with:
-          ref: bpf-5.10-phoenix
+          ref: ${{ matrix.ref }}
           fetch-depth: 0
           submodules: false
 
-      - name: Update NoMount via setup.sh
+      - name: Update NoMount via setup.sh (${{ matrix.variant }})
         run: |
           set -euo pipefail
+          echo "Target branch: ${{ matrix.ref }} (${{ matrix.variant }})"
           # Ensure submodule is initialized (checkout uses submodules: false)
+          git submodule sync --recursive || true
           git submodule update --init --depth 1 NoMount || git clone https://github.com/maxsteeel/nomount NoMount
           # Handle shallow clones like build-kernel.yml does
           if [ "$(git -C NoMount rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
-            git -C NoMount fetch --unshallow --tags --prune --force
+            git -C NoMount fetch --unshallow --tags --prune --force || true
             git -C NoMount fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
           else
             git -C NoMount fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
@@ -64,6 +73,9 @@ jobs:
       - name: Commit and push if changed
         if: steps.diff.outputs.changed == 'true'
         run: |
+          set -euo pipefail
+          BRANCH="${{ matrix.ref }}"
+          echo "Committing to branch: $BRANCH"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -78,5 +90,5 @@ jobs:
           NOMOUNT_SHA=$(git -C NoMount rev-parse --short HEAD 2>/dev/null || echo "unknown")
           git commit -m "chore: bump NoMount to ${NOMOUNT_SHA} [skip ci]" || echo "nothing to commit"
 
-          git pull --rebase origin bpf-5.10-phoenix || true
-          git push origin HEAD:bpf-5.10-phoenix || (git pull --rebase origin bpf-5.10-phoenix && git push origin HEAD:bpf-5.10-phoenix)
+          git pull --rebase origin "${BRANCH}" || true
+          git push origin "HEAD:${BRANCH}" || (git pull --rebase origin "${BRANCH}" && git push origin "HEAD:${BRANCH}")
