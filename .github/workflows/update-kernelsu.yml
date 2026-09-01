@@ -8,49 +8,54 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: update-kernelsu-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   update-kernelsu:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: resukisu
+            ref: main-resuki
+            sub: KernelSU
+            url: https://github.com/ReSukiSU/ReSukiSU
+            upstream: main
+            setup_url: https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh
+            setup_args: ""
+          - variant: ksunext
+            ref: main-ksun
+            sub: KernelSU-Next
+            url: https://github.com/KernelSU-Next/KernelSU-Next
+            upstream: legacy
+            setup_url: https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh
+            setup_args: legacy
+    name: Update KernelSU (${{ matrix.variant }})
     runs-on: ubuntu-latest
+    concurrency:
+      group: update-kernelsu-${{ matrix.ref }}
+      cancel-in-progress: false
     steps:
-      - name: Checkout current branch
+      - name: Checkout ${{ matrix.ref }}
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.ref }}
           fetch-depth: 0
           submodules: false
 
-      - name: Update KernelSU (branch-aware)
+      - name: Update KernelSU (${{ matrix.variant }})
         run: |
           set -euo pipefail
-          BRANCH="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
-          echo "Current branch: $BRANCH"
-
-          if [ "$BRANCH" = "main-ksun" ]; then
-            SUB="KernelSU-Next"
-            URL="https://github.com/KernelSU-Next/KernelSU-Next"
-            UPSTREAM="legacy"
-            SETUP_URL="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh"
-            SETUP_ARGS="legacy"
-          else
-            # Default: main-resuki -> ReSukiSU
-            SUB="KernelSU"
-            URL="https://github.com/ReSukiSU/ReSukiSU"
-            UPSTREAM="main"
-            SETUP_URL="https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh"
-            SETUP_ARGS=""
-          fi
-
-          echo "SUB=$SUB URL=$URL UPSTREAM=$UPSTREAM SETUP_URL=$SETUP_URL ARGS=$SETUP_ARGS"
+          SUB="${{ matrix.sub }}"
+          URL="${{ matrix.url }}"
+          UPSTREAM="${{ matrix.upstream }}"
+          SETUP_URL="${{ matrix.setup_url }}"
+          SETUP_ARGS="${{ matrix.setup_args }}"
+          echo "Target: ${{ matrix.ref }} (${{ matrix.variant }}) SUB=$SUB UPSTREAM=$UPSTREAM"
 
           # Ensure submodule is initialized (checkout uses submodules: false)
           git submodule sync --recursive || true
           git submodule update --init --depth 1 "$SUB" || git clone --depth 1 --branch "$UPSTREAM" "$URL" "$SUB" || git clone "$URL" "$SUB"
 
-          # Handle shallow clones like build-kernel.yml does - use wildcard refspec to ensure origin/<branch> exists (FETCH_HEAD alone is not enough)
+          # Handle shallow clones - use wildcard refspec to ensure origin/<branch> exists (FETCH_HEAD alone is not enough)
           if [ "$(git -C "$SUB" rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
             git -C "$SUB" fetch --unshallow --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*' || \
             git -C "$SUB" fetch --tags --prune --force origin '+refs/heads/*:refs/remotes/origin/*'
@@ -72,18 +77,13 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
+          SUB="${{ matrix.sub }}"
           git status --porcelain
           echo "=== git diff ==="
           git diff --stat --ignore-submodules=none || true
           echo "=== git diff --cached ==="
           git diff --cached --stat || true
 
-          # Detect which submodule is in use (KernelSU-Next vs KernelSU)
-          if [ -d "KernelSU-Next" ]; then
-            SUB="KernelSU-Next"
-          else
-            SUB="KernelSU"
-          fi
           KSU_HEAD=$(git -C "$SUB" rev-parse HEAD 2>/dev/null || echo "unknown")
           KSU_INDEX=$(git rev-parse "HEAD:$SUB" 2>/dev/null || echo "unknown")
           echo "SUB=$SUB KSU_INDEX=$KSU_INDEX KSU_HEAD=$KSU_HEAD"
@@ -99,38 +99,22 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          BRANCH="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
-          echo "Committing to branch: $BRANCH"
-
-          if [ -d "KernelSU-Next" ]; then
-            SUB="KernelSU-Next"
-          else
-            SUB="KernelSU"
-          fi
-
+          BRANCH="${{ matrix.ref }}"
+          SUB="${{ matrix.sub }}"
+          echo "Committing to $BRANCH ($SUB)"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Stage gitlink + files modified by setup.sh (drivers/kernelsu symlink, Makefile, Kconfig)
-          if [ -d "KernelSU-Next" ]; then
-            git add KernelSU-Next || true
-          fi
-          if [ -d "KernelSU" ]; then
-            git add KernelSU || true
-          fi
+          git add "$SUB" || true
           git add drivers/Makefile drivers/Kconfig || true
-          # Symlink drivers/kernelsu is inside drivers/; add if it was created/modified
           git add drivers/kernelsu || true
 
-          # Show what will be committed
           git status
           git diff --cached --stat
 
           KSU_SHA=$(git -C "$SUB" rev-parse --short HEAD 2>/dev/null || echo "unknown")
           git commit -m "chore: bump ${SUB} to ${KSU_SHA} [skip ci]" || echo "nothing to commit"
 
-          # Rebase onto latest remote to avoid non-fast-forward when both bots run concurrently
           git pull --rebase origin "${BRANCH}" || true
-
-          # Push with retry once on failure
           git push origin "HEAD:${BRANCH}" || (git pull --rebase origin "${BRANCH}" && git push origin "HEAD:${BRANCH}")
