@@ -1,7 +1,7 @@
-[submodule "KernelSU"]
-	path = KernelSU
-	url = https://github.com/ReSukiSU/ReSukiSU
-	branch = main
+[submodule "KernelSU-Next"]
+	path = KernelSU-Next
+	url = https://github.com/KernelSU-Next/KernelSU-Next
+	branch = legacy
 [submodule "NoMount"]
 	path = NoMount
 	url = https://github.com/maxsteeel/nomount

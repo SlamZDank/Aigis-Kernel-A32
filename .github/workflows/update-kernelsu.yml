@@ -9,49 +9,82 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-kernelsu
+  group: update-kernelsu-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   update-kernelsu:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/bpf-5.10-phoenix'
     steps:
-      - name: Checkout bpf-5.10-phoenix
+      - name: Checkout current branch
         uses: actions/checkout@v4
         with:
-          ref: bpf-5.10-phoenix
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
           submodules: false
 
-      - name: Update KernelSU via setup.sh
+      - name: Update KernelSU (branch-aware)
         run: |
           set -euo pipefail
-          # Ensure submodule is initialized (checkout uses submodules: false)
-          git submodule update --init --depth 1 KernelSU || git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          # Handle shallow clones like build-kernel.yml does
-          if [ "$(git -C KernelSU rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
-            git -C KernelSU fetch --unshallow --tags --prune --force origin main
+          BRANCH="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+          echo "Current branch: $BRANCH"
+
+          if [ "$BRANCH" = "main-ksun" ]; then
+            SUB="KernelSU-Next"
+            URL="https://github.com/KernelSU-Next/KernelSU-Next"
+            UPSTREAM="legacy"
+            SETUP_URL="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh"
+            SETUP_ARGS="legacy"
           else
-            git -C KernelSU fetch --tags --prune --force origin main
+            # Default: main-resuki -> ReSukiSU
+            SUB="KernelSU"
+            URL="https://github.com/ReSukiSU/ReSukiSU"
+            UPSTREAM="main"
+            SETUP_URL="https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh"
+            SETUP_ARGS=""
           fi
-          git -C KernelSU checkout -B main origin/main
-          git -C KernelSU reset --hard origin/main
-          echo "KSU now $(git -C KernelSU rev-parse --short HEAD) origin $(git -C KernelSU rev-parse --short origin/main)"
+
+          echo "SUB=$SUB URL=$URL UPSTREAM=$UPSTREAM SETUP_URL=$SETUP_URL ARGS=$SETUP_ARGS"
+
+          # Ensure submodule is initialized (checkout uses submodules: false)
+          git submodule update --init --depth 1 "$SUB" || git clone "$URL" "$SUB"
+
+          # Handle shallow clones like build-kernel.yml does
+          if [ "$(git -C "$SUB" rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
+            git -C "$SUB" fetch --unshallow --tags --prune --force origin "$UPSTREAM"
+          else
+            git -C "$SUB" fetch --tags --prune --force origin "$UPSTREAM"
+          fi
+          git -C "$SUB" checkout -B "$UPSTREAM" "origin/$UPSTREAM"
+          git -C "$SUB" reset --hard "origin/$UPSTREAM"
+          echo "KSU now $(git -C "$SUB" rev-parse --short HEAD) origin $(git -C "$SUB" rev-parse --short "origin/$UPSTREAM")"
+
           # Keep upstream setup.sh for symlink/Makefile/Kconfig idempotency
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash - || true
+          if [ -n "$SETUP_ARGS" ]; then
+            curl -LSs "$SETUP_URL" | bash -s "$SETUP_ARGS" || true
+          else
+            curl -LSs "$SETUP_URL" | bash - || true
+          fi
 
       - name: Detect changes
         id: diff
         run: |
+          set -euo pipefail
           git status --porcelain
           echo "=== git diff ==="
           git diff --stat --ignore-submodules=none || true
           echo "=== git diff --cached ==="
           git diff --cached --stat || true
-          KSU_HEAD=$(git -C KernelSU rev-parse HEAD 2>/dev/null || echo "unknown")
-          KSU_INDEX=$(git rev-parse HEAD:KernelSU 2>/dev/null || echo "unknown")
-          echo "KSU_INDEX=$KSU_INDEX KSU_HEAD=$KSU_HEAD"
+
+          # Detect which submodule is in use (KernelSU-Next vs KernelSU)
+          if [ -d "KernelSU-Next" ]; then
+            SUB="KernelSU-Next"
+          else
+            SUB="KernelSU"
+          fi
+          KSU_HEAD=$(git -C "$SUB" rev-parse HEAD 2>/dev/null || echo "unknown")
+          KSU_INDEX=$(git rev-parse "HEAD:$SUB" 2>/dev/null || echo "unknown")
+          echo "SUB=$SUB KSU_INDEX=$KSU_INDEX KSU_HEAD=$KSU_HEAD"
           if [ "$KSU_HEAD" != "$KSU_INDEX" ] || ! git diff --quiet --ignore-submodules=none || ! git diff --cached --quiet; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Changes detected."
@@ -63,11 +96,26 @@ jobs:
       - name: Commit and push if changed
         if: steps.diff.outputs.changed == 'true'
         run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+          echo "Committing to branch: $BRANCH"
+
+          if [ -d "KernelSU-Next" ]; then
+            SUB="KernelSU-Next"
+          else
+            SUB="KernelSU"
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Stage gitlink + files modified by setup.sh (drivers/kernelsu symlink, Makefile, Kconfig)
-          git add KernelSU || true
+          if [ -d "KernelSU-Next" ]; then
+            git add KernelSU-Next || true
+          fi
+          if [ -d "KernelSU" ]; then
+            git add KernelSU || true
+          fi
           git add drivers/Makefile drivers/Kconfig || true
           # Symlink drivers/kernelsu is inside drivers/; add if it was created/modified
           git add drivers/kernelsu || true
@@ -76,11 +124,11 @@ jobs:
           git status
           git diff --cached --stat
 
-          KSU_SHA=$(git -C KernelSU rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          git commit -m "chore: bump KernelSU to ${KSU_SHA} [skip ci]" || echo "nothing to commit"
+          KSU_SHA=$(git -C "$SUB" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          git commit -m "chore: bump ${SUB} to ${KSU_SHA} [skip ci]" || echo "nothing to commit"
 
           # Rebase onto latest remote to avoid non-fast-forward when both bots run concurrently
-          git pull --rebase origin bpf-5.10-phoenix || true
+          git pull --rebase origin "${BRANCH}" || true
 
           # Push with retry once on failure
-          git push origin HEAD:bpf-5.10-phoenix || (git pull --rebase origin bpf-5.10-phoenix && git push origin HEAD:bpf-5.10-phoenix)
+          git push origin "HEAD:${BRANCH}" || (git pull --rebase origin "${BRANCH}" && git push origin "HEAD:${BRANCH}")
