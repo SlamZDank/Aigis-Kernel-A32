@@ -1283,6 +1283,7 @@ static int ip6_setup_cork(struct sock *sk, struct inet_cork_full *cork,
 	cork->base.fragsize = mtu;
 	if (dst_allfrag(xfrm_dst_path(&rt->dst)))
 		cork->base.flags |= IPCORK_ALLFRAG;
+	cork->base.gso_size = sk->sk_type == SOCK_DGRAM ? ipc6->gso_size : 0;
 	cork->base.length = 0;
 
 	return 0;
@@ -1818,6 +1819,7 @@ struct sk_buff *ip6_make_skb(struct sock *sk,
 	cork->base.addr = 0;
 	cork->base.opt = NULL;
 	cork->base.dst = NULL;
+	cork->base.gso_size = 0;
 	v6_cork.opt = NULL;
 	err = ip6_setup_cork(sk, cork, &v6_cork, ipc6, rt, fl6);
 	if (err) {
