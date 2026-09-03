@@ -1424,6 +1424,7 @@ back_from_confirm:
 		struct inet_cork_full cork;
 		struct sk_buff *skb;
 
+		memset(&cork, 0, sizeof(cork));
 		skb = ip6_make_skb(sk, getfrag, msg, ulen,
 				   sizeof(struct udphdr), &ipc6,
 				   &fl6, (struct rt6_info *)dst,
