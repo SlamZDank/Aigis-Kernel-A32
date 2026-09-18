@@ -3,6 +3,7 @@
 #define _LINUX_TIMEKEEPING_H
 
 #include <linux/errno.h>
+#include <linux/time64.h>
 
 /* Included from linux/ktime.h */
 
@@ -30,6 +31,17 @@ struct timespec64 current_kernel_time64(void);
 struct timespec64 get_monotonic_coarse64(void);
 extern void getrawmonotonic64(struct timespec64 *ts);
 extern void ktime_get_ts64(struct timespec64 *ts);
+extern void ktime_get_real_ts64(struct timespec64 *tv);
+extern void ktime_get_coarse_ts64(struct timespec64 *ts);
+static inline u64 ktime_get_coarse_ns(void)
+{
+	struct timespec64 ts;
+
+	ktime_get_coarse_ts64(&ts);
+	return timespec64_to_ns(&ts);
+}
+
+extern void ktime_get_coarse_real_ts64(struct timespec64 *ts);
 extern time64_t ktime_get_seconds(void);
 extern time64_t ktime_get_real_seconds(void);
 
@@ -130,12 +142,6 @@ static inline u64 ktime_get_clocktai_ns(void)
 static inline u64 ktime_get_raw_ns(void)
 {
 	return ktime_to_ns(ktime_get_raw());
-}
-
-static inline u64 ktime_get_coarse_ns(void)
-{
-	/* 4.14 has no ktime_get_coarse_ns; use precise monotonic as coarse fallback */
-	return ktime_get_ns();
 }
 
 extern u64 ktime_get_mono_fast_ns(void);

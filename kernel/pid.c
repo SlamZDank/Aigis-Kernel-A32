@@ -42,6 +42,7 @@
 #include <linux/sched/signal.h>
 #include <linux/sched/task.h>
 #include <linux/idr.h>
+#include <linux/err.h>
 
 #define pid_hashfn(nr, ns)	\
 	hash_long((unsigned long)nr + (unsigned long)ns, pidhash_shift)
@@ -514,21 +515,7 @@ SYSCALL_DEFINE2(pidfd_open, pid_t, pid, unsigned int, flags)
 
 struct pid *pidfd_get_pid(unsigned int fd, unsigned int *flags)
 {
-	struct file *file;
-	struct pid *pid;
-
-	file = fget(fd);
-	if (!file)
-		return ERR_PTR(-EBADF);
-	if (file->f_op != &pidfd_fops) {
-		fput(file);
-		return ERR_PTR(-EINVAL);
-	}
-	if (flags)
-		*flags = file->f_flags;
-	pid = get_pid(file->private_data);
-	fput(file);
-	return pid;
+	return ERR_PTR(-EOPNOTSUPP);
 }
 
 /*
