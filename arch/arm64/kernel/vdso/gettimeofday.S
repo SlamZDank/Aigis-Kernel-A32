@@ -115,7 +115,7 @@ x_tmp		.req	x8
 9998:
 	.endm
 
-	.macro clock_gettime_return, shift=0
+	.macro clock_gettime_return shift
 	.if \shift == 1
 	lsr	x11, x11, x12
 	.endif
@@ -220,7 +220,7 @@ realtime:
 	get_clock_shifted_nsec res=x15, cycle_last=x10, mult=x11
 	get_ts_realtime res_sec=x10, res_nsec=x11, \
 		clock_nsec=x15, xtime_sec=x13, xtime_nsec=x14, nsec_to_sec=x9
-	clock_gettime_return, shift=1
+	clock_gettime_return 1
 
 	ALIGN
 monotonic:
@@ -243,7 +243,7 @@ monotonic:
 		clock_nsec=x15, xtime_sec=x13, xtime_nsec=x14, nsec_to_sec=x9
 
 	add_ts sec=x10, nsec=x11, ts_sec=x3, ts_nsec=x4, nsec_to_sec=x9
-	clock_gettime_return, shift=1
+	clock_gettime_return 1
 
 	ALIGN
 monotonic_raw:
@@ -264,14 +264,14 @@ monotonic_raw:
 		clock_nsec=x15, nsec_to_sec=x9
 
 	add_ts sec=x10, nsec=x11, ts_sec=x13, ts_nsec=x14, nsec_to_sec=x9
-	clock_gettime_return, shift=1
+	clock_gettime_return 1
 
 	ALIGN
 realtime_coarse:
 	seqcnt_acquire
 	ldp	x10, x11, [vdso_data, #VDSO_XTIME_CRS_SEC]
 	seqcnt_check fail=realtime_coarse
-	clock_gettime_return
+	clock_gettime_return 0
 
 	ALIGN
 monotonic_coarse:
@@ -283,7 +283,7 @@ monotonic_coarse:
 	/* Computations are done in (non-shifted) nsecs. */
 	get_nsec_per_sec res=x9
 	add_ts sec=x10, nsec=x11, ts_sec=x13, ts_nsec=x14, nsec_to_sec=x9
-	clock_gettime_return
+	clock_gettime_return 0
 
 	ALIGN
 syscall: /* Syscall fallback. */
