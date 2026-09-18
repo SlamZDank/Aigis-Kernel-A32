@@ -21,9 +21,7 @@
 #include <asm/irq.h>
 #include <asm/sections.h>
 
-#if __has_include(<mt-plat/mtk_sched_mon.h>)
 #include <mt-plat/mtk_sched_mon.h>
-#endif
 
 /*
  * These correspond to the IORESOURCE_IRQ_* defines in

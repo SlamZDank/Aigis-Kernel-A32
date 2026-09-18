@@ -2,7 +2,7 @@
 #
 # Makefile for building the SELinux module as part of the kernel tree.
 #
-ccflags-y := -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include
+ccflags-y := -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(srctree)/drivers/misc/mediatek/include
 
 obj-$(CONFIG_SECURITY_SELINUX) := selinux.o
 
