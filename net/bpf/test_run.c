@@ -885,12 +885,14 @@ int bpf_prog_test_run_sk_lookup(struct bpf_prog *prog, const union bpf_attr *kat
 	if (ret < 0)
 		goto out;
 
+	user_ctx->cookie = 0;
 	if (ctx.selected_sk) {
 		if (ctx.selected_sk->sk_reuseport && !ctx.no_reuseport) {
 			ret = -EOPNOTSUPP;
 			goto out;
 		}
 
+		user_ctx->cookie = sock_gen_cookie(ctx.selected_sk);
 	}
 
 	ret = bpf_test_finish(kattr, uattr, NULL, 0, retval, duration);
