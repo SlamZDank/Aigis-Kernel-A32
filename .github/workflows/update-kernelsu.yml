@@ -15,19 +15,12 @@ jobs:
       matrix:
         include:
           - variant: resukisu
-            ref: main-resuki
+            ref: bpf-5.15
             sub: KernelSU
             url: https://github.com/ReSukiSU/ReSukiSU
             upstream: main
             setup_url: https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh
             setup_args: ""
-          - variant: ksunext
-            ref: main-ksun
-            sub: KernelSU-Next
-            url: https://github.com/KernelSU-Next/KernelSU-Next
-            upstream: legacy
-            setup_url: https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh
-            setup_args: legacy
     name: Update KernelSU (${{ matrix.variant }})
     runs-on: ubuntu-latest
     concurrency:

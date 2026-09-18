@@ -3,16 +3,12 @@ name: Build Kernel
 on:
   push:
     branches:
-      - main-resuki
-      - main-ksun
-      - common
+      - bpf-5.15
     tags:
       - 'v*'
   pull_request:
     branches:
-      - main-resuki
-      - main-ksun
-      - common
+      - bpf-5.15
   workflow_dispatch:
 
 permissions:
@@ -32,13 +28,9 @@ jobs:
       matrix:
         include:
           - variant: resukisu
-            ref: main-resuki
+            ref: bpf-5.15
             ksu_dir: KernelSU
             suffix: ReSukiSU
-          - variant: ksunext
-            ref: main-ksun
-            ksu_dir: KernelSU-Next
-            suffix: KSU-Next
     name: Build A325F (${{ matrix.suffix }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
