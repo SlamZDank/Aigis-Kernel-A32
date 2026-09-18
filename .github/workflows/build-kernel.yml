@@ -170,6 +170,15 @@ jobs:
           "$toolchain/bin/ld.lld" --version | head -n 1
           echo "Toolchain contents:"
           ls -lh "$toolchain/bin" | head -n 20 || true
+          # ZyC clang provides clang/ld.lld but some scripts expect CROSS_COMPILE gcc wrapper
+          for p in aarch64-linux-gnu arm-linux-gnueabi; do
+            if [ ! -x "$toolchain/bin/${p}-gcc" ]; then
+              echo "Creating wrapper $toolchain/bin/${p}-gcc -> clang"
+              ln -sf clang "$toolchain/bin/${p}-gcc"
+              ln -sf clang "$toolchain/bin/${p}-g++" 2>/dev/null || true
+            fi
+          done
+          ls -lh "$toolchain/bin/"*gcc* "$toolchain/bin/"*g++* 2>&1 | head -n 20 || true
 
       - name: Show build metadata
         shell: bash
