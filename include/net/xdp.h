@@ -106,6 +106,7 @@ struct xdp_frame {
 struct xdp_cpumap_stats {
 	unsigned int pass;
 	unsigned int drop;
+	unsigned int redirect;
 };
 
 /* Clear kernel pointers in xdp_frame */
