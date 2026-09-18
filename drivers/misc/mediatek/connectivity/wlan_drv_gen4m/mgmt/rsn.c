@@ -2318,29 +2318,8 @@ void rsnGeneratePmkidIndication(IN struct ADAPTER *prAdapter,
 uint32_t rsnCheckBipKeyInstalled(IN struct ADAPTER
 				 *prAdapter, IN struct STA_RECORD *prStaRec)
 {
-	/* caution: prStaRec might be null ! */
-	if (prStaRec) {
-		if (GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex)
-		    ->eNetworkType == (uint8_t) NETWORK_TYPE_AIS) {
-			return aisGetAisSpecBssInfo(prAdapter,
-				prStaRec->ucBssIndex)
-				->fgBipKeyInstalled;
-		} else if ((GET_BSS_INFO_BY_INDEX(prAdapter,
-				prStaRec->ucBssIndex)
-				->eNetworkType == NETWORK_TYPE_P2P)
-				&&
-			(GET_BSS_INFO_BY_INDEX(prAdapter,
-				prStaRec->ucBssIndex)
-				->eCurrentOPMode == OP_MODE_ACCESS_POINT)) {
-			if (prStaRec->rPmfCfg.fgApplyPmf)
-				DBGLOG(RSN, INFO, "AP-STA PMF capable\n");
-			return prStaRec->rPmfCfg.fgApplyPmf;
-		} else {
-			return FALSE;
-		}
-	} else
-		return FALSE;
-
+	/* PMF disabled for mt6768 softAP to fix WPA2 deauth loop */
+	return FALSE;
 }
 
 /*----------------------------------------------------------------------------*/
