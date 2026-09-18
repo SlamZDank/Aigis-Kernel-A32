@@ -3,12 +3,12 @@ name: Build Kernel
 on:
   push:
     branches:
-      - bpf-5.15
+      - bpf-5.15-legion
     tags:
       - 'v*'
   pull_request:
     branches:
-      - bpf-5.15
+      - bpf-5.15-legion
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
       matrix:
         include:
           - variant: resukisu
-            ref: bpf-5.15
+            ref: bpf-5.15-legion
             ksu_dir: KernelSU
             suffix: ReSukiSU
     name: Build A325F (${{ matrix.suffix }})

@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - variant: resukisu
-            ref: bpf-5.15
+            ref: bpf-5.15-legion
             sub: KernelSU
             url: https://github.com/ReSukiSU/ReSukiSU
             upstream: main

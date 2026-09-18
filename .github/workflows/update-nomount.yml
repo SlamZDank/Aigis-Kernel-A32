@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - variant: resukisu
-            ref: bpf-5.15
+            ref: bpf-5.15-legion
     name: Update NoMount (${{ matrix.variant }})
     runs-on: ubuntu-latest
     concurrency:
