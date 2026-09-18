@@ -170,12 +170,16 @@ jobs:
           "$toolchain/bin/ld.lld" --version | head -n 1
           echo "Toolchain contents:"
           ls -lh "$toolchain/bin" | head -n 20 || true
-          # ZyC clang provides clang/ld.lld but some scripts expect CROSS_COMPILE gcc wrapper
+          # ZyC clang provides clang/ld.lld but some scripts expect CROSS_COMPILE gcc wrapper with target
           for p in aarch64-linux-gnu arm-linux-gnueabi; do
+            target=""
+            if [ "$p" = "aarch64-linux-gnu" ]; then target="aarch64-linux-gnu"; else target="arm-linux-gnueabi"; fi
             if [ ! -x "$toolchain/bin/${p}-gcc" ]; then
-              echo "Creating wrapper $toolchain/bin/${p}-gcc -> clang"
-              ln -sf clang "$toolchain/bin/${p}-gcc"
-              ln -sf clang "$toolchain/bin/${p}-g++" 2>/dev/null || true
+              echo "Creating wrapper $toolchain/bin/${p}-gcc -> clang --target=$target"
+              printf '#!/bin/sh\nexec clang --target=%s "$@"\n' "$target" > "$toolchain/bin/${p}-gcc"
+              chmod +x "$toolchain/bin/${p}-gcc"
+              printf '#!/bin/sh\nexec clang++ --target=%s "$@"\n' "$target" > "$toolchain/bin/${p}-g++"
+              chmod +x "$toolchain/bin/${p}-g++" 2>/dev/null || true
             fi
           done
           ls -lh "$toolchain/bin/"*gcc* "$toolchain/bin/"*g++* 2>&1 | head -n 20 || true
