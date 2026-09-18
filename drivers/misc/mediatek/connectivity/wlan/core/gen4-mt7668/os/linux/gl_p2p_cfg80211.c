@@ -811,19 +811,8 @@ int mtk_p2p_cfg80211_get_key(struct wiphy *wiphy,
 			     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *)
 )
 {
-	P_GLUE_INFO_T prGlueInfo = NULL;
-
-	ASSERT(wiphy);
-
-#if CFG_CHIP_RESET_SUPPORT
-	if (checkResetState())
-		DBGLOG(P2P, ERROR, "mtk_p2p_cfg80211_get_key\n");
-#endif
-	prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
-
-	/* not implemented yet */
-
-	return -EINVAL;
+	/* PMF/BIP get_key stub for 4.14 softAP PMF: return success to avoid hostapd PMKID/BIP deauth loop (reason 6) */
+	return 0;
 }
 
 int mtk_p2p_cfg80211_del_key(struct wiphy *wiphy,

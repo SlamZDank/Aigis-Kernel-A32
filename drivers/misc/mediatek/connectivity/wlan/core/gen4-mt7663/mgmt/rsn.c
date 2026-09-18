@@ -2596,8 +2596,27 @@ void rsnGenerateWSCIE(IN struct ADAPTER *prAdapter,
 uint32_t rsnCheckBipKeyInstalled(IN struct ADAPTER
 				 *prAdapter, IN struct STA_RECORD *prStaRec)
 {
-	/* PMF disabled for mt6768 softAP to fix WPA2 deauth loop */
-	return FALSE;
+	/* caution: prStaRec might be null ! */
+	if (prStaRec) {
+		if (GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex)
+		    ->eNetworkType == (uint8_t) NETWORK_TYPE_AIS) {
+			return prAdapter->rWifiVar.rAisSpecificBssInfo.
+			    fgBipKeyInstalled;
+		} else if ((GET_BSS_INFO_BY_INDEX(prAdapter,
+				prStaRec->ucBssIndex)
+				->eNetworkType == NETWORK_TYPE_P2P)
+				&&
+			(GET_BSS_INFO_BY_INDEX(prAdapter,
+				prStaRec->ucBssIndex)
+				->eCurrentOPMode == OP_MODE_ACCESS_POINT)) {
+			DBGLOG(RSN, INFO, "AP-STA PMF capable:%d\n",
+			       prStaRec->rPmfCfg.fgApplyPmf);
+			return prStaRec->rPmfCfg.fgApplyPmf;
+		} else {
+			return FALSE;
+		}
+	} else
+		return FALSE;
 
 }
 

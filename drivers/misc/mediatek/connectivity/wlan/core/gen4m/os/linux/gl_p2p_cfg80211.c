@@ -778,16 +778,8 @@ int mtk_p2p_cfg80211_get_key(struct wiphy *wiphy,
 		void (*callback)
 			(void *cookie, struct key_params *))
 {
-	struct GLUE_INFO *prGlueInfo = NULL;
-
-	ASSERT(wiphy);
-
-	P2P_WIPHY_PRIV(wiphy, prGlueInfo);
-
-	/* not implemented yet */
-	DBGLOG(RSN, INFO, "not support this func\n");
-
-	return -EINVAL;
+	/* PMF/BIP get_key stub for softAP PMF: return success to avoid hostapd deauth loop */
+	return 0;
 }
 
 int mtk_p2p_cfg80211_del_key(struct wiphy *wiphy,

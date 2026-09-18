@@ -2075,10 +2075,22 @@ VOID rsnGeneratePmkidIndication(IN P_ADAPTER_T prAdapter)
 /*----------------------------------------------------------------------------*/
 UINT_32 rsnCheckBipKeyInstalled(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 {
-	/* PMF disabled for softAP: force not PMF capable */
-	return FALSE;
+	/* caution: prStaRec might be null !*/
+	if (prStaRec != NULL) {
+		if (prStaRec
+		&& GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex)->eNetworkType == (UINT_8) NETWORK_TYPE_AIS)
+			return prAdapter->rWifiVar.rAisSpecificBssInfo.fgBipKeyInstalled;
+		else if ((prStaRec != NULL)
+		&& GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex)->eNetworkType == (UINT_8) NETWORK_TYPE_P2P
+		&& GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex)->eCurrentOPMode == OP_MODE_ACCESS_POINT) {
+			if (prStaRec->rPmfCfg.fgApplyPmf)
+				DBGLOG(RSN, INFO, "AP-STA PMF capable\n");
+			return prStaRec->rPmfCfg.fgApplyPmf;
+		} else
+			return FALSE;
+	} else
+		return FALSE;
 }
-
 
 /*----------------------------------------------------------------------------*/
 /*!

@@ -377,9 +377,9 @@ int mtk_p2p_cfg80211_get_key(struct wiphy *wiphy,
 
 	prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
 
-	/* not implemented yet */
+	/* PMF/BIP get_key stub for softAP PMF: return success to avoid hostapd deauth loop */
 
-	return -EINVAL;
+	return 0;
 }
 
 int mtk_p2p_cfg80211_del_key(struct wiphy *wiphy,
