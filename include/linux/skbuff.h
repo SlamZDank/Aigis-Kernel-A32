@@ -4381,6 +4381,7 @@ static inline void skb_reset_redirect(struct sk_buff *skb)
 {
 	skb->redirected = 0;
 }
+#define HAVE_SKB_RESET_REDIRECT
 
 #endif	/* __KERNEL__ */
 #endif	/* _LINUX_SKBUFF_H */

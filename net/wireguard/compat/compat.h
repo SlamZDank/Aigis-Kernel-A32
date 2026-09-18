@@ -1055,7 +1055,7 @@ static inline void __compat_icmpv6_ndo_send(struct sk_buff *skb_in, u8 type, u8 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 14) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 29) && !defined(ISUBUNTU1910) && !defined(ISUBUNTU1904) && !defined(ISRHEL8))
 #include <linux/skbuff.h>
 #include <net/sch_generic.h>
-#if !defined(skb_reset_redirect)
+#if !defined(HAVE_SKB_RESET_REDIRECT)
 static inline void skb_reset_redirect(struct sk_buff *skb)
 {
 #ifdef CONFIG_NET_SCHED
