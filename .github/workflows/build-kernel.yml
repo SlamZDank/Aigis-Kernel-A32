@@ -230,9 +230,24 @@ jobs:
           make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" -j$(nproc) \
             KCFLAGS=' -w -pipe -O3' \
             CONFIG_SECTION_MISMATCH_WARN_ONLY=y 2>&1 | tee "$RUNNER_TEMP/build.log"
+          status=${PIPESTATUS[0]}
+          echo "Build exit: $status"
+          tail -n 200 "$RUNNER_TEMP/build.log" || true
+          if [ $status -ne 0 ]; then
+            echo "::error::Kernel build failed, see log"
+            exit $status
+          fi
 
           echo "Build completed"
           ls -lh "$OUT_DIR/arch/arm64/boot/" || true
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.suffix }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/build.log
+          if-no-files-found: warn
 
       - name: Verify Image
         shell: bash
