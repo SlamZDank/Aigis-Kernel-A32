@@ -150,6 +150,12 @@
 
 #include "net-sysfs.h"
 
+/* 4.14 compatibility - skb_is_tc_redirected not in 4.14, stub for XDP generic */
+static inline bool skb_is_tc_redirected(const struct sk_buff *skb)
+{
+	return false;
+}
+
 /* Instead of increasing this, you should create a hash table. */
 #define MAX_GRO_SKBS 8
 

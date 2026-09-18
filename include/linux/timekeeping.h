@@ -132,6 +132,12 @@ static inline u64 ktime_get_raw_ns(void)
 	return ktime_to_ns(ktime_get_raw());
 }
 
+static inline u64 ktime_get_coarse_ns(void)
+{
+	/* 4.14 has no ktime_get_coarse_ns; use precise monotonic as coarse fallback */
+	return ktime_get_ns();
+}
+
 extern u64 ktime_get_mono_fast_ns(void);
 extern u64 ktime_get_raw_fast_ns(void);
 extern u64 ktime_get_boot_fast_ns(void);

@@ -512,6 +512,25 @@ SYSCALL_DEFINE2(pidfd_open, pid_t, pid, unsigned int, flags)
 	return fd;
 }
 
+struct pid *pidfd_get_pid(unsigned int fd, unsigned int *flags)
+{
+	struct file *file;
+	struct pid *pid;
+
+	file = fget(fd);
+	if (!file)
+		return ERR_PTR(-EBADF);
+	if (file->f_op != &pidfd_fops) {
+		fput(file);
+		return ERR_PTR(-EINVAL);
+	}
+	if (flags)
+		*flags = file->f_flags;
+	pid = get_pid(file->private_data);
+	fput(file);
+	return pid;
+}
+
 /*
  * The pid hash table is scaled according to the amount of memory in the
  * machine.  From a minimum of 16 slots up to 4096 slots at one gigabyte or
