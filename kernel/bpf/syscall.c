@@ -4775,9 +4775,9 @@ BPF_CALL_1(bpf_sys_close, u32, fd)
 	 * A syscall program must not call this helper while an fdget()/fdput()
 	 * pair is active. It is intended for the syscall-program test-run path.
 	 * The 4.19 vendor tree exposes ksys_close(), rather than v5.15's
-	 * close_fd(), for this operation.
+	 * close_fd(), for this operation. 4.14 uses __close_fd().
 	 */
-	return ksys_close(fd);
+	return __close_fd(current->files, fd);
 }
 
 static const struct bpf_func_proto bpf_sys_close_proto = {
