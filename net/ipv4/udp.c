@@ -1094,6 +1094,7 @@ back_from_confirm:
 	if (!corkreq) {
 		struct inet_cork cork;
 
+		memset(&cork, 0, sizeof(cork));
 		skb = ip_make_skb(sk, fl4, getfrag, msg, ulen,
 				  sizeof(struct udphdr), &ipc, &rt,
 				  &cork, msg->msg_flags);
