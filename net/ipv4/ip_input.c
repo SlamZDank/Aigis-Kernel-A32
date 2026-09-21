@@ -308,7 +308,8 @@ drop:
 
 int udp_v4_early_demux(struct sk_buff *);
 int tcp_v4_early_demux(struct sk_buff *);
-static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
+static int ip_rcv_finish_core(struct net *net, struct sock *sk,
+			      struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct net_device *dev = skb->dev;
@@ -517,9 +518,7 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	if (!skb_sk_is_prefetched(skb))
 		skb_orphan(skb);
 
-	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING,
-		       net, NULL, skb, dev, NULL,
-		       ip_rcv_finish);
+	return skb;
 
 csum_error:
 	__IP_INC_STATS(net, IPSTATS_MIB_CSUMERRORS);
@@ -528,7 +527,7 @@ inhdr_error:
 drop:
 	kfree_skb(skb);
 out:
-	return NULL;
+	return NET_RX_DROP;
 }
 
 /*
