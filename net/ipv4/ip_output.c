@@ -902,11 +902,13 @@ static int __ip_append_data(struct sock *sk,
 	int csummode = CHECKSUM_NONE;
 	struct rtable *rt = (struct rtable *)cork->dst;
 	u32 tskey = 0;
+	bool paged;
 
 	skb = skb_peek_tail(queue);
 
 	exthdrlen = !skb ? rt->dst.header_len : 0;
 	mtu = cork->gso_size ? IP_MAX_MTU : cork->fragsize;
+	paged = !!cork->gso_size;
 
 	if (cork->tx_flags & SKBTX_ANY_SW_TSTAMP &&
 	    sk->sk_tsflags & SOF_TIMESTAMPING_OPT_ID)
@@ -958,6 +960,7 @@ static int __ip_append_data(struct sock *sk,
 			unsigned int fraglen;
 			unsigned int fraggap;
 			unsigned int alloclen;
+			unsigned int pagedlen = 0;
 			struct sk_buff *skb_prev;
 alloc_new_skb:
 			skb_prev = skb;
@@ -978,8 +981,12 @@ alloc_new_skb:
 			if ((flags & MSG_MORE) &&
 			    !(rt->dst.dev->features&NETIF_F_SG))
 				alloclen = mtu;
-			else
+			else if (!paged)
 				alloclen = fraglen;
+			else {
+				alloclen = min_t(int, fraglen, MAX_HEADER);
+				pagedlen = fraglen - alloclen;
+			}
 
 			alloclen += exthdrlen;
 
@@ -1024,7 +1031,7 @@ alloc_new_skb:
 			/*
 			 *	Find where to start putting bytes.
 			 */
-			data = skb_put(skb, fraglen + exthdrlen);
+			data = skb_put(skb, fraglen + exthdrlen - pagedlen);
 			skb_set_network_header(skb, exthdrlen);
 			skb->transport_header = (skb->network_header +
 						 fragheaderlen);
@@ -1040,7 +1047,7 @@ alloc_new_skb:
 				pskb_trim_unique(skb_prev, maxfraglen);
 			}
 
-			copy = datalen - transhdrlen - fraggap;
+			copy = datalen - transhdrlen - fraggap - pagedlen;
 			if (copy > 0 && getfrag(from, data + transhdrlen, offset, copy, fraggap, skb) < 0) {
 				err = -EFAULT;
 				kfree_skb(skb);
@@ -1048,7 +1055,7 @@ alloc_new_skb:
 			}
 
 			offset += copy;
-			length -= datalen - fraggap;
+			length -= copy + transhdrlen;
 			transhdrlen = 0;
 			exthdrlen = 0;
 			csummode = CHECKSUM_NONE;
@@ -1154,8 +1161,8 @@ static int ip_setup_cork(struct sock *sk, struct inet_cork *cork,
 		cork->addr = ipc->addr;
 	}
 
-	cork->gso_size = sk->sk_type == SOCK_DGRAM ? ipc->gso_size : 0;
-
+	cork->gso_size = sk->sk_type == SOCK_DGRAM &&
+			 sk->sk_protocol == IPPROTO_UDP ? ipc->gso_size : 0;
 	cork->dst = &rt->dst;
 	/* We stole this route, caller should not release it. */
 	*rtp = NULL;
@@ -1519,7 +1526,7 @@ struct sk_buff *ip_make_skb(struct sock *sk,
 	cork->flags = 0;
 	cork->addr = 0;
 	cork->opt = NULL;
-  cork->gso_size = 0;
+  	cork->gso_size = 0;
 	err = ip_setup_cork(sk, cork, ipc, rtp);
 	if (err)
 		return ERR_PTR(err);
