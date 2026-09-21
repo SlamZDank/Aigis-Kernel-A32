@@ -215,8 +215,7 @@ resubmit:
 	} else {
 		if (!raw) {
 			if (xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
-				__IP_INC_STATS(net,
-					       IPSTATS_MIB_INUNKNOWNPROTOS);
+				__IP_INC_STATS(net, IPSTATS_MIB_INUNKNOWNPROTOS);
 				icmp_send(skb, ICMP_DEST_UNREACH,
 					  ICMP_PROT_UNREACH, 0);
 			}
@@ -228,8 +227,7 @@ resubmit:
 	}
 }
 
-static int ip_local_deliver_finish(struct net *net, struct sock *sk,
-				   struct sk_buff *skb)
+static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	__skb_pull(skb, skb_network_header_len(skb));
 
@@ -310,8 +308,7 @@ drop:
 
 int udp_v4_early_demux(struct sk_buff *);
 int tcp_v4_early_demux(struct sk_buff *);
-static int ip_rcv_finish_core(struct net *net, struct sock *sk,
-			      struct sk_buff *skb)
+static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct net_device *dev = skb->dev;
@@ -405,7 +402,7 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 			goto drop;
 	}
 
-	return NET_RX_SUCCESS;
+	return dst_input(skb);
 
 drop:
 	kfree_skb(skb);
@@ -440,6 +437,7 @@ static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 {
 	const struct iphdr *iph;
+	struct net *net;
 	u32 len;
 
 	/* When the interface is in promisc. mode, drop all the crap
@@ -449,6 +447,7 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 		goto drop;
 
 
+	net = dev_net(dev);
 	__IP_UPD_PO_STATS(net, IPSTATS_MIB_IN, skb->len);
 
 	skb = skb_share_check(skb, GFP_ATOMIC);
@@ -518,7 +517,9 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	if (!skb_sk_is_prefetched(skb))
 		skb_orphan(skb);
 
-	return skb;
+	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING,
+		       net, NULL, skb, dev, NULL,
+		       ip_rcv_finish);
 
 csum_error:
 	__IP_INC_STATS(net, IPSTATS_MIB_CSUMERRORS);
