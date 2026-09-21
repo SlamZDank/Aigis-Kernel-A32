@@ -4552,8 +4552,6 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 			spin_unlock(root_lock);
 		}
 	}
-
-	xfrm_dev_backlog(sd);
 }
 
 #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_ATM_LANE)
