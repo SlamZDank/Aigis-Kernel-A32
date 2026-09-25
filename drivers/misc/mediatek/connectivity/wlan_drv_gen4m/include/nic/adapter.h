@@ -621,6 +621,10 @@ struct BSS_INFO {
 	uint8_t aucSubbandTriplet[253];
 	enum ENUM_IFTYPE eIftype;
 
+	/* Buffer for WPA2 PMKID */
+	/* The PMKID cache lifetime is expire by media_disconnect_indication */
+	struct LINK rPmkidCache;
+
 #if CFG_SUPPORT_DFS
 	struct SWITCH_CH_AND_BAND_PARAMS CSAParams;
 #endif

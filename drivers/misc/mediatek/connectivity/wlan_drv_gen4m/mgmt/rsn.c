@@ -1866,6 +1866,8 @@ void rsnParserCheckForRSNCCMPPSK(struct ADAPTER *prAdapter,
 	uint8_t i;
 	uint16_t statusCode;
 
+	prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter,
+					  prStaRec->ucBssIndex);
 	*pu2StatusCode = STATUS_CODE_INVALID_INFO_ELEMENT;
 
 	if (rsnParseRsnIE(prAdapter, prIe, &rRsnIe)) {
@@ -1982,9 +1984,6 @@ void rsnParserCheckForRSNCCMPPSK(struct ADAPTER *prAdapter,
 		       prStaRec->rPmfCfg.fgMfpc, prStaRec->rPmfCfg.fgMfpr,
 		       prStaRec->rPmfCfg.fgSha256, prStaRec->ucBssIndex,
 		       prStaRec->rPmfCfg.fgApplyPmf);
-
-		prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter,
-						  prStaRec->ucBssIndex);
 
 #if CFG_SUPPORT_SOFTAP_WPA3
 		if (prBssInfo->u4RsnSelectedAKMSuite == RSN_AKM_SUITE_SAE
@@ -2137,13 +2136,14 @@ struct PMKID_ENTRY *rsnSearchPmkidEntry(IN struct ADAPTER *prAdapter,
 			     IN uint8_t *pucBssid,
 			     IN uint8_t ucBssIndex)
 {
-	struct AIS_SPECIFIC_BSS_INFO *prAisSpecBssInfo;
+	struct BSS_INFO *prBssInfo;
+
 	struct PMKID_ENTRY *entry;
 	struct LINK *cache;
 
-	prAisSpecBssInfo = aisGetAisSpecBssInfo(prAdapter,
+	prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter,
 		ucBssIndex);
-	cache = &prAisSpecBssInfo->rPmkidCache;
+	cache = &prBssInfo->rPmkidCache;
 
 	LINK_FOR_EACH_ENTRY(entry, cache, rLinkEntry, struct PMKID_ENTRY) {
 		if (EQUAL_MAC_ADDR(entry->rBssidInfo.arBSSID, pucBssid))
@@ -2218,13 +2218,13 @@ void rsnCheckPmkidCache(IN struct ADAPTER *prAdapter, IN struct BSS_DESC *prBss,
 uint32_t rsnSetPmkid(IN struct ADAPTER *prAdapter,
 		    IN struct PARAM_PMKID *prPmkid)
 {
-	struct AIS_SPECIFIC_BSS_INFO *prAisSpecBssInfo;
+	struct BSS_INFO *prBssInfo;
 	struct PMKID_ENTRY *entry;
 	struct LINK *cache;
 
-	prAisSpecBssInfo = aisGetAisSpecBssInfo(prAdapter,
+	prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter,
 		prPmkid->ucBssIdx);
-	cache = &prAisSpecBssInfo->rPmkidCache;
+	cache = &prBssInfo->rPmkidCache;
 
 	entry = rsnSearchPmkidEntry(prAdapter, prPmkid->arBSSID,
 		prPmkid->ucBssIdx);
@@ -2262,7 +2262,7 @@ uint32_t rsnSetPmkid(IN struct ADAPTER *prAdapter,
 uint32_t rsnDelPmkid(IN struct ADAPTER *prAdapter,
 		    IN struct PARAM_PMKID *prPmkid)
 {
-	struct AIS_SPECIFIC_BSS_INFO *prAisSpecBssInfo;
+	struct BSS_INFO *prBssInfo;
 	struct PMKID_ENTRY *entry;
 	struct LINK *cache;
 
@@ -2273,9 +2273,9 @@ uint32_t rsnDelPmkid(IN struct ADAPTER *prAdapter,
 		prPmkid->ucBssIdx,
 		MAC2STR(prPmkid->arBSSID));
 
-	prAisSpecBssInfo = aisGetAisSpecBssInfo(prAdapter,
+	prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter,
 		prPmkid->ucBssIdx);
-	cache = &prAisSpecBssInfo->rPmkidCache;
+	cache = &prBssInfo->rPmkidCache;
 	entry = rsnSearchPmkidEntry(prAdapter, prPmkid->arBSSID,
 		prPmkid->ucBssIdx);
 	if (entry) {
@@ -2300,13 +2300,13 @@ uint32_t rsnDelPmkid(IN struct ADAPTER *prAdapter,
 /*----------------------------------------------------------------------------*/
 uint32_t rsnFlushPmkid(IN struct ADAPTER *prAdapter, IN uint8_t ucBssIndex)
 {
-	struct AIS_SPECIFIC_BSS_INFO *prAisSpecBssInfo;
+	struct BSS_INFO *prBssInfo;
 	struct PMKID_ENTRY *entry;
 	struct LINK *cache;
 
-	prAisSpecBssInfo =
-		aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
-	cache = &prAisSpecBssInfo->rPmkidCache;
+	prBssInfo =
+		GET_BSS_INFO_BY_INDEX(prAdapter, ucBssIndex);
+	cache = &prBssInfo->rPmkidCache;
 
 	DBGLOG(RSN, TRACE, "[%d] Flush Pmkid total:%d\n",
 		ucBssIndex,

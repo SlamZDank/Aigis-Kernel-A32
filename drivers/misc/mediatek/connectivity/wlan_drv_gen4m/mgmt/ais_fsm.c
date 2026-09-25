@@ -495,7 +495,7 @@ void aisFsmInit(IN struct ADAPTER *prAdapter, uint8_t ucBssIndex)
 		   sizeof(prAisSpecificBssInfo->arCurEssChnlInfo));
 	LINK_INITIALIZE(&prAisSpecificBssInfo->rCurEssLink);
 	/* end Support AP Selection */
-	LINK_INITIALIZE(&prAisSpecificBssInfo->rPmkidCache);
+	LINK_INITIALIZE(&prAisBssInfo->rPmkidCache);
 	/* 11K, 11V */
 	LINK_MGMT_INIT(&prAisSpecificBssInfo->rNeighborApList);
 	kalMemZero(&prAisSpecificBssInfo->rBTMParam,

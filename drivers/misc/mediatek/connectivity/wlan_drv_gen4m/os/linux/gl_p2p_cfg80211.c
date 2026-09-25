@@ -2696,6 +2696,11 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy,
 		(struct MSG_P2P_CONNECTION_ABORT *) NULL;
 	uint8_t aucBcMac[] = BC_MAC_ADDR;
 	uint8_t ucRoleIdx = 0;
+	uint8_t ucBssIdx = 0;
+	uint32_t waitRet = 0;
+	struct BSS_INFO *prBssInfo = NULL;
+	struct STA_RECORD *prCurrStaRec =
+		(struct STA_RECORD *) NULL;
 
 	do {
 		if ((wiphy == NULL) || (dev == NULL))
@@ -2716,6 +2721,9 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy,
 		 * kalMemAlloc(sizeof(struct MSG_P2P_CONNECTION_ABORT),
 		 * VIR_MEM_TYPE);
 		 */
+		if (p2pFuncRoleToBssIdx(prGlueInfo->prAdapter,
+			ucRoleIdx, &ucBssIdx) != WLAN_STATUS_SUCCESS)
+			break;
 
 		prDisconnectMsg = (struct MSG_P2P_CONNECTION_ABORT *)
 		    cnmMemAlloc(prGlueInfo->prAdapter, RAM_TYPE_MSG,
@@ -2731,13 +2739,39 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy,
 		COPY_MAC_ADDR(prDisconnectMsg->aucTargetID, mac);
 		prDisconnectMsg->u2ReasonCode = params->reason_code;
 		prDisconnectMsg->fgSendDeauth = TRUE;
-
+		prBssInfo =
+			GET_BSS_INFO_BY_INDEX(
+			prGlueInfo->prAdapter,
+			ucBssIdx);
+		prCurrStaRec = bssGetClientByMac(prGlueInfo->prAdapter,
+			prBssInfo,
+			prDisconnectMsg->aucTargetID);
 
 		mboxSendMsg(prGlueInfo->prAdapter,
 			MBOX_ID_0,
 			(struct MSG_HDR *) prDisconnectMsg,
 			MSG_SEND_METHOD_BUF);
-
+#if CFG_SUPPORT_802_11W
+		/* if encrypted deauth frame
+		 * is in process, pending remove key
+		*/
+		if (prBssInfo && prCurrStaRec &&
+			IS_BSS_APGO(prBssInfo) &&
+			(prBssInfo->u4RsnSelectedAKMSuite ==
+			RSN_AKM_SUITE_SAE)) {
+			reinit_completion(&prBssInfo->rDeauthComp);
+			DBGLOG(P2P, TRACE,
+				"Start deauth wait\n");
+			waitRet = wait_for_completion_timeout(
+				&prBssInfo->rDeauthComp,
+				MSEC_TO_JIFFIES(1000));
+			if (!waitRet) {
+				DBGLOG(RSN, WARN, "timeout\n");
+				prBssInfo->encryptedDeauthIsInProcess = FALSE;
+			} else
+				DBGLOG(RSN, TRACE, "complete\n");
+		}
+#endif
 		i4Rslt = 0;
 	} while (FALSE);
 
@@ -3489,6 +3523,12 @@ int mtk_p2p_cfg80211_testmode_cmd(struct wiphy *wiphy,
 					wdev, data, len);
 			break;
 
+		case TESTMODE_CMD_ID_UPDATE_STA_PMKID:
+			i4Status =
+			mtk_p2p_cfg80211_testmode_update_sta_pmkid_cmd(
+				wiphy, wdev->netdev, data, len);
+			break;
+
 		default:
 			i4Status = -EINVAL;
 			break;
@@ -4214,6 +4254,78 @@ int mtk_p2p_cfg80211_testmode_sw_cmd(IN struct wiphy *wiphy,
 
 	if (rstatus != WLAN_STATUS_SUCCESS)
 		fgIsValid = -EFAULT;
+
+	return fgIsValid;
+}
+
+int mtk_p2p_cfg80211_testmode_update_sta_pmkid_cmd(IN struct wiphy *wiphy,
+		IN struct net_device *nDev, IN void *data, IN int len)
+{
+	struct GLUE_INFO *prGlueInfo = NULL;
+	struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS *prParams =
+		(struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS *) NULL;
+	struct PARAM_PMKID pmkid;
+	uint8_t ucRoleIdx = 0;
+	uint8_t ucBssIdx = 0;
+	uint32_t rStatus;
+	uint32_t u4BufLen;
+	int fgIsValid = 0;
+
+	ASSERT(wiphy);
+
+	P2P_WIPHY_PRIV(wiphy, prGlueInfo);
+
+	if (data && len)
+		prParams = (struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS *)
+			data;
+	else
+		return -EFAULT;
+
+	if (len < sizeof(struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS)) {
+		DBGLOG(P2P, WARN, "len [%d] is invalid!\n",
+			len);
+		return -EINVAL;
+	}
+
+	if (mtk_Netdev_To_RoleIdx(prGlueInfo, nDev, &ucRoleIdx) < 0) {
+		DBGLOG(P2P, WARN, "mtk_Netdev_To_RoleIdx\n");
+		return -EINVAL;
+	}
+	if (p2pFuncRoleToBssIdx(prGlueInfo->prAdapter,
+		ucRoleIdx, &ucBssIdx) != WLAN_STATUS_SUCCESS) {
+		DBGLOG(P2P, WARN, "p2pFuncRoleToBssIdx\n");
+		return -EINVAL;
+	}
+
+	COPY_MAC_ADDR(pmkid.arBSSID, prParams->aucSta);
+	kalMemCopy(pmkid.arPMKID, prParams->aucPmkid, IW_PMKID_LEN);
+	pmkid.ucBssIdx = ucBssIdx;
+	if (prParams->ucAddRemove) {
+		rStatus = kalIoctl(prGlueInfo, wlanoidSetPmkid, &pmkid,
+				   sizeof(struct PARAM_PMKID),
+				   FALSE, FALSE, FALSE, &u4BufLen);
+		if (rStatus != WLAN_STATUS_SUCCESS)
+			DBGLOG(INIT, INFO, "add pmkid error:%x\n", rStatus);
+	} else {
+		rStatus = kalIoctl(prGlueInfo, wlanoidDelPmkid, &pmkid,
+				   sizeof(struct PARAM_PMKID),
+				   FALSE, FALSE, FALSE, &u4BufLen);
+		if (rStatus != WLAN_STATUS_SUCCESS)
+			DBGLOG(INIT, INFO, "remove pmkid error:%x\n", rStatus);
+	}
+
+	DBGLOG(P2P, LOUD,
+		"%s " MACSTR " PMKID:" PMKSTR "\n",
+		prParams->ucAddRemove?"Add":"Remove",
+		MAC2STR(prParams->aucSta),
+		prParams->aucPmkid[0], prParams->aucPmkid[1],
+		prParams->aucPmkid[2], prParams->aucPmkid[3],
+		prParams->aucPmkid[4], prParams->aucPmkid[5],
+		prParams->aucPmkid[6], prParams->aucPmkid[7],
+		prParams->aucPmkid[8], prParams->aucPmkid[9],
+		prParams->aucPmkid[10], prParams->aucPmkid[11],
+		prParams->aucPmkid[12] + prParams->aucPmkid[13],
+		prParams->aucPmkid[14], prParams->aucPmkid[15]);
 
 	return fgIsValid;
 }
