@@ -274,6 +274,12 @@ u_int8_t rsnParseRsnIE(IN struct ADAPTER *prAdapter,
 				u2PmkidCount);
 			return FALSE;
 		}
+
+		if (u2PmkidCount > 0) {
+			kalMemCopy(prRsnInfo->aucPmkid, cp, IW_PMKID_LEN);
+			cp += IW_PMKID_LEN;
+			u4RemainRsnIeLen -= IW_PMKID_LEN;
+		}
 	} while (FALSE);
 
 	/* Save the RSN information for the BSS. */
@@ -351,7 +357,9 @@ u_int8_t rsnParseRsnIE(IN struct ADAPTER *prAdapter,
 
 	prRsnInfo->u2RsnCap = u2Cap;
 	prRsnInfo->fgRsnCapPresent = TRUE;
-	DBGLOG(RSN, LOUD, "RSN cap: 0x%04x\n", prRsnInfo->u2RsnCap);
+	prRsnInfo->u2PmkidCount = u2PmkidCount;
+	DBGLOG(RSN, LOUD, "RSN cap: 0x%04x, PMKID count: %d\n",
+		prRsnInfo->u2RsnCap, prRsnInfo->u2PmkidCount);
 
 	return TRUE;
 }				/* rsnParseRsnIE */
@@ -1734,6 +1742,12 @@ void rsnGenerateRSNIE(IN struct ADAPTER *prAdapter,
 			} else  {
 				entry = rsnSearchPmkidEntry(prAdapter,
 					prStaRec->aucMacAddr, ucBssIndex);
+				if (prStaRec->ucAuthAlgNum ==
+						AUTH_ALGORITHM_NUM_SAE) {
+					DBGLOG(RSN, INFO,
+						"Do not apply PMKID in RSNIE if auth type is SAE");
+					entry = NULL;
+				}
 			}
 			/* Fill PMKID Count and List field */
 			if (entry) {
@@ -1883,6 +1897,42 @@ void rsnParserCheckForRSNCCMPPSK(struct ADAPTER *prAdapter,
 			DBGLOG(RSN, WARN, "RSN with invalid AKMP\n");
 			*pu2StatusCode = STATUS_CODE_INVALID_AKMP;
 			return;
+		}
+
+		if (prAdapter->rWifiVar.fgSapCheckPmkidInDriver
+			&& prBssInfo->u4RsnSelectedAKMSuite
+				== RSN_AKM_SUITE_SAE
+			&& rRsnIe.u2PmkidCount > 0) {
+			struct PMKID_ENTRY *entry =
+				rsnSearchPmkidEntry(prAdapter,
+				prStaRec->aucMacAddr,
+				prStaRec->ucBssIndex);
+
+			DBGLOG(RSN, LOUD,
+				"Parse PMKID " PMKSTR " from " MACSTR "\n",
+				rRsnIe.aucPmkid[0], rRsnIe.aucPmkid[1],
+				rRsnIe.aucPmkid[2], rRsnIe.aucPmkid[3],
+				rRsnIe.aucPmkid[4], rRsnIe.aucPmkid[5],
+				rRsnIe.aucPmkid[6], rRsnIe.aucPmkid[7],
+				rRsnIe.aucPmkid[8], rRsnIe.aucPmkid[9],
+				rRsnIe.aucPmkid[10], rRsnIe.aucPmkid[11],
+				rRsnIe.aucPmkid[12] + rRsnIe.aucPmkid[13],
+				rRsnIe.aucPmkid[14], rRsnIe.aucPmkid[15],
+				MAC2STR(prStaRec->aucMacAddr));
+
+			if (!entry) {
+				DBGLOG(RSN, WARN, "RSN with no PMKID\n");
+				*pu2StatusCode = STATUS_INVALID_PMKID;
+				return;
+			} else if (kalMemCmp(
+				rRsnIe.aucPmkid,
+				entry->rBssidInfo.arPMKID,
+				IW_PMKID_LEN) != 0) {
+				DBGLOG(RSN, WARN, "RSN with invalid PMKID\n");
+				*pu2StatusCode = STATUS_INVALID_PMKID;
+				return;
+			}
+
 		}
 
 		DBGLOG(RSN, TRACE, "RSN with CCMP-PSK\n");

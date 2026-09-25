@@ -1174,6 +1174,8 @@ struct WIFI_VAR {
 #endif
 	uint8_t fgReuseRSNIE;
 
+	uint8_t fgSapCheckPmkidInDriver;
+
 	uint32_t u4DiscoverTimeout;
 	uint32_t u4InactiveTimeout;
 	uint32_t u4BtmDelta;
