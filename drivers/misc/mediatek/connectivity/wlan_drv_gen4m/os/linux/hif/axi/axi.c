@@ -1288,6 +1288,16 @@ static bool axiCopyRxData(struct GL_HIF_INFO *prHifInfo,
 	struct sk_buff *prSkb = ((struct sk_buff *)prSwRfb->pvPacket);
 	uint32_t u4Size = pRxD->SDLen0;
 
+	if (prSkb == NULL) {
+		DBGLOG(RX, ERROR, "prSkb == NULL\n");
+		return false;
+	}
+
+	if (prSkb->data == NULL) {
+		DBGLOG(RX, ERROR, "prSkb->data == NULL\n");
+		return false;
+	}
+
 	if (u4Size > CFG_RX_MAX_PKT_SIZE) {
 		DBGLOG(RX, ERROR, "Rx Data too large[%u]\n", u4Size);
 		return false;

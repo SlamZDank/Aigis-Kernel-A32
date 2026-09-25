@@ -1115,14 +1115,12 @@ authSendDeauthFrame(IN struct ADAPTER *prAdapter,
 			     + MAC_TX_RESERVED_FIELD);
 
 			prDeauthFrame->u2FrameCtrl |= MASK_FC_PROTECTED_FRAME;
-			if (GET_BSS_INFO_BY_INDEX(prAdapter,
-				prStaRec->ucBssIndex)->eNetworkType ==
-				(uint8_t) NETWORK_TYPE_AIS) {
-				GET_BSS_INFO_BY_INDEX(prAdapter,
-					prStaRec->ucBssIndex)
-					->encryptedDeauthIsInProcess
-						= TRUE;
-			}
+
+			/* Set deauth flag except p2p gc scenario*/
+			GET_BSS_INFO_BY_INDEX(prAdapter,
+				prStaRec->ucBssIndex)
+				->encryptedDeauthIsInProcess
+					= TRUE;
 			DBGLOG(SAA, INFO,
 			       "Reason=%d, DestAddr=" MACSTR
 			       " srcAddr=" MACSTR " BSSID=" MACSTR "\n",

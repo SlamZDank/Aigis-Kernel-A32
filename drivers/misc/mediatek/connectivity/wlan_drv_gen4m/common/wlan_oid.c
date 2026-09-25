@@ -7030,6 +7030,12 @@ wlanoidSetSwCtrlWrite(IN struct ADAPTER *prAdapter,
 		ucChannelWidth = (uint8_t)((u4Data & BITS(8, 11)) >> 8);
 		ucBssIndex = (uint8_t) u2SubId;
 
+		if (!IS_BSS_INDEX_VALID(ucBssIndex)) {
+			DBGLOG(RLM, ERROR,
+				"Invalid bssidx:%d\n", ucBssIndex);
+			break;
+		}
+
 		if ((u2SubId & BITS(8, 15)) != 0) { /* Debug OP change
 						     * parameters
 						     */
