@@ -4424,9 +4424,6 @@ wext_indicate_wext_event(IN struct GLUE_INFO *prGlueInfo,
 		wlanGetNetDev(prGlueInfo, ucBssIndex);
 
 	switch (u4Cmd) {
-	case SIOCGIWTXPOW:
-		memcpy(&wrqu.power, pucData, u4dataLen);
-		break;
 	case SIOCGIWSCAN:
 		complete_all(&prGlueInfo->rScanComp);
 		break;

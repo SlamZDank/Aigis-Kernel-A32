@@ -4576,6 +4576,12 @@ mtk_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 	rCmdMgt.ucDialogToken = dialog_token;
 	rCmdMgt.ucActionCode = action_code;
 	kalMemCopy(&(rCmdMgt.aucPeer), peer, 6);
+
+	if  (len > TDLS_SEC_BUF_LENGTH) {
+		DBGLOG(REQ, WARN, "%s:len > TDLS_SEC_BUF_LENGTH\n", __func__);
+		return -EINVAL;
+	}
+
 	kalMemCopy(&(rCmdMgt.aucSecBuf), buf, len);
 	rCmdMgt.ucBssIdx = ucBssIndex;
 	kalIoctl(prGlueInfo, TdlsexLinkMgt, &rCmdMgt,
@@ -4616,11 +4622,14 @@ mtk_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 	rCmdMgt.ucDialogToken = dialog_token;
 	rCmdMgt.ucActionCode = action_code;
 	kalMemCopy(&(rCmdMgt.aucPeer), peer, 6);
-	if	(len > TDLS_SEC_BUF_LENGTH)
+
+	if (len > TDLS_SEC_BUF_LENGTH) {
 		DBGLOG(REQ, WARN,
 		       "In mtk_cfg80211_tdls_mgmt , len > TDLS_SEC_BUF_LENGTH, please check\n");
-	else
-		kalMemCopy(&(rCmdMgt.aucSecBuf), buf, len);
+		return -EINVAL;
+	}
+
+	kalMemCopy(&(rCmdMgt.aucSecBuf), buf, len);
 	rCmdMgt.ucBssIdx = ucBssIndex;
 	kalIoctl(prGlueInfo, TdlsexLinkMgt, &rCmdMgt,
 		 sizeof(struct TDLS_CMD_LINK_MGT), FALSE, TRUE, FALSE,

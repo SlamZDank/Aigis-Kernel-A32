@@ -13911,7 +13911,7 @@ int32_t priv_driver_cmds(IN struct net_device *prNetDev, IN int8_t *pcCommand,
 				 FALSE, &i4BytesWritten);
 		} else if (!strnicmp(pcCommand, CMD_FW_EVENT, 9)) {
 			kalIoctl(prGlueInfo, wlanoidFwEventIT,
-				 (void *)(pcCommand + 9), i4TotalLen, FALSE,
+				 (void *)(pcCommand + 9), i4TotalLen - 9, FALSE,
 				 FALSE, FALSE, &i4BytesWritten);
 		} else if (!strnicmp(pcCommand, CMD_DUMP_UAPSD,
 				     strlen(CMD_DUMP_UAPSD))) {
