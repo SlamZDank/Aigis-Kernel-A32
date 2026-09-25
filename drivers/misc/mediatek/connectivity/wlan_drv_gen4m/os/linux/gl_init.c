@@ -3127,7 +3127,7 @@ void wlanSetSuspendMode(struct GLUE_INFO *prGlueInfo,
 	if (!prGlueInfo)
 		return;
 
-	/* LumiROM: keep the STA path awake while SoftAP is up. This also
+	/* Keep the STA path awake while SoftAP is up. This also
 	 * covers the early-suspend path (wlan_early_suspend), which calls
 	 * here directly and bypasses priv_driver_set_suspend_mode.
 	 */

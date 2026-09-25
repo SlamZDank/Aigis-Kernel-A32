@@ -9944,7 +9944,7 @@ int priv_driver_set_suspend_mode(IN struct net_device *prNetDev,
 		else
 			fgEnable = FALSE;
 
-		/* LumiROM: never suspend the STA path while SoftAP is up.
+		/* Never suspend the STA path while SoftAP is up.
 		 * On single-radio STA+AP concurrency the shared radio stalls
 		 * AP beacons across STA suspend/deinit, and AP clients get
 		 * dropped with no deauth reason. Skip the transition and keep
