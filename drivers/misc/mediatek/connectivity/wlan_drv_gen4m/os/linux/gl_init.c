@@ -3127,6 +3127,17 @@ void wlanSetSuspendMode(struct GLUE_INFO *prGlueInfo,
 	if (!prGlueInfo)
 		return;
 
+	/* LumiROM: keep the STA path awake while SoftAP is up. This also
+	 * covers the early-suspend path (wlan_early_suspend), which calls
+	 * here directly and bypasses priv_driver_set_suspend_mode.
+	 */
+	if (fgEnable && prGlueInfo->prAdapter &&
+	    cnmSapIsActive(prGlueInfo->prAdapter)) {
+		DBGLOG(INIT, INFO,
+		       "%s: SAP active, skip STA suspend\n", __func__);
+		return;
+	}
+
 
 	for (u4Idx = 0; u4Idx < KAL_AIS_NUM; u4Idx++) {
 		prDev = wlanGetNetDev(prGlueInfo, u4Idx);
