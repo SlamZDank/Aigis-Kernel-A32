@@ -154,6 +154,8 @@ else
 	$(if $(ARCH_POSTLINK), $(MAKE) -f $(ARCH_POSTLINK) $@, true)
 endif
 
+cmd_ld_ko_o += ; $(STRIP) --strip-debug $@
+
 quiet_cmd_btf_ko = BTF [M] $@
       cmd_btf_ko =                                                     \
 	if [ -f vmlinux ]; then                                             \
