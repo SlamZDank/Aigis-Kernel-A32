@@ -156,6 +156,13 @@ int __fsnotify_parent(const struct path *path, struct dentry *dentry, __u32 mask
 	if (!(dentry->d_flags & DCACHE_FSNOTIFY_PARENT_WATCHED))
 		return 0;
 
+	/*
+	 * ACCESS/MODIFY on special files are not on the parent's filesystem,
+	 * so don't report them to the parent watcher (side-channel).
+	 */
+	if (path && d_is_special(dentry) && (mask & (FS_ACCESS | FS_MODIFY)))
+		return 0;
+
 	parent = dget_parent(dentry);
 	p_inode = parent->d_inode;
 
