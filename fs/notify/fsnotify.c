@@ -157,9 +157,11 @@ int __fsnotify_parent(const struct path *path, struct dentry *dentry, __u32 mask
 		return 0;
 
 	/*
-	 * ACCESS/MODIFY on special files are not on the parent's filesystem,
-	 * so don't report them to the parent watcher (side-channel).
-	 */
+	 * The parent interest in ACCESS/MODIFY events does not apply to special
+	 * files, where read/write are not on the filesystem of the parent and
+	 * events can provide an undesirable side-channel for information
+	 * exfiltration.
+ 	 */
 	if (path && d_is_special(dentry) && (mask & (FS_ACCESS | FS_MODIFY)))
 		return 0;
 
