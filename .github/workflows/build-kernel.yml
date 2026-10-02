@@ -3,12 +3,12 @@ name: Build Kernel
 on:
   push:
     branches:
-      - bpf-5.15-legion
+      - bpf-5.15-legion-susfs
     tags:
       - 'v*'
   pull_request:
     branches:
-      - bpf-5.15-legion
+      - bpf-5.15-legion-susfs
   workflow_dispatch:
 
 permissions:
