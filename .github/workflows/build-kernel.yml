@@ -28,7 +28,7 @@ jobs:
       matrix:
         include:
           - variant: resukisu
-            ref: bpf-5.15-legion
+            ref: bpf-5.15-legion-susfs
             ksu_dir: KernelSU
             suffix: ReSukiSU
     name: Build A325F (${{ matrix.suffix }})
