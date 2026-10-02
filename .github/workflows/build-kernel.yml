@@ -279,7 +279,7 @@ jobs:
           # Create ZIP name with variant suffix, short sha and date
           SHORT_SHA="$(git rev-parse --short=8 HEAD)"
           DATE="$(date +%Y%m%d)"
-          ZIP_NAME="Aigis-Kernel-${{ matrix.suffix }}-${DATE}-${SHORT_SHA}.zip"
+          ZIP_NAME="Aigis-Kernel-${{ matrix.suffix }}-SUSFS-${DATE}-${SHORT_SHA}.zip"
           ZIP_PATH="$GITHUB_WORKSPACE/$ZIP_NAME"
 
           echo "Creating AnyKernel ZIP: $ZIP_NAME"
