@@ -31,10 +31,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: resukisu
-            ref: main-resuki
+          - variant: bakasu
+            ref: main-bakasu
             ksu_dir: KernelSU
-            suffix: ReSukiSU
+            suffix: BakaSU
           - variant: ksunext
             ref: main-ksun
             ksu_dir: KernelSU-Next

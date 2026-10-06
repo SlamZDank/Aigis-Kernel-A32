@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: resukisu
-            ref: main-resuki
+          - variant: bakasu
+            ref: main-bakasu
           - variant: ksunext
             ref: main-ksun
     name: Update NoMount (${{ matrix.variant }})
