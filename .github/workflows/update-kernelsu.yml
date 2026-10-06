@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: resukisu
+          - variant: bakasu
             ref: bpf-5.15-legion-susfs
             sub: KernelSU
             url: https://github.com/Baka-SU/BakaSU
