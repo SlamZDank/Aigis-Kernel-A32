@@ -17,9 +17,9 @@ jobs:
           - variant: resukisu
             ref: bpf-5.15-legion
             sub: KernelSU
-            url: https://github.com/ReSukiSU/ReSukiSU
+            url: https://github.com/Baka-SU/BakaSU
             upstream: main
-            setup_url: https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh
+            setup_url: https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh
             setup_args: ""
     name: Update KernelSU (${{ matrix.variant }})
     runs-on: ubuntu-latest
