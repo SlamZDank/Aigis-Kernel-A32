@@ -3,14 +3,14 @@ name: Build Kernel
 on:
   push:
     branches:
-      - main-resuki
+      - main-bakasu
       - main-ksun
       - common
     tags:
       - 'v*'
   pull_request:
     branches:
-      - main-resuki
+      - main-bakasu
       - main-ksun
       - common
   workflow_dispatch:

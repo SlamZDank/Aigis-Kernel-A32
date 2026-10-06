@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: resukisu
-            ref: main-resuki
+          - variant: bakasu
+            ref: main-bakasu
             sub: KernelSU
             url: https://github.com/Baka-SU/BakaSU
             upstream: main
