@@ -27,10 +27,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: resukisu
+          - variant: bakasu
             ref: bpf-5.15-legion-susfs
             ksu_dir: KernelSU
-            suffix: ReSukiSU
+            suffix: BakaSU
     name: Build A325F (${{ matrix.suffix }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
