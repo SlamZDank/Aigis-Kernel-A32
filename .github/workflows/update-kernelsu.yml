@@ -17,9 +17,9 @@ jobs:
           - variant: resukisu
             ref: main-resuki
             sub: KernelSU
-            url: https://github.com/ReSukiSU/ReSukiSU
+            url: https://github.com/Baka-SU/BakaSU
             upstream: main
-            setup_url: https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh
+            setup_url: https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh
             setup_args: ""
           - variant: ksunext
             ref: main-ksun
