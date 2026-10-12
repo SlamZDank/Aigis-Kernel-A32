@@ -36,13 +36,8 @@ void sec_debug_auto_comment_log_disable(int type)
 
 void sec_debug_auto_comment_log_once(int type)
 {
-#ifdef CONFIG_MACH_MT6739
 	if (atomic_read(&(ac_idx[type].logging_entry)))
 		sec_debug_auto_comment_log_disable(type);
-#else
-	if (atomic64_read(&(ac_idx[type].logging_entry)))
-		sec_debug_auto_comment_log_disable(type);
-#endif
 	else
 		atomic_inc(&(ac_idx[type].logging_entry));
 }
@@ -52,26 +47,15 @@ static inline void sec_debug_hook_auto_comm(int type, const char *buf, size_t si
 	struct sec_debug_auto_comm_buf *p = &auto_comment_info->auto_comm_buf[type];
 	unsigned int offset = p->offset;
 
-#ifdef CONFIG_MACH_MT6739
 	if (atomic_read(&(ac_idx[type].logging_disable)))
 		return;
-#else
-	if (atomic64_read(&(ac_idx[type].logging_disable)))
-		return;
-#endif
 
 	if (offset + size > SZ_4K)
 		return;
 
-#ifdef CONFIG_MACH_MT6739
 	if (init_data[type].max_count &&
 	    (atomic_read(&(ac_idx[type].logging_count)) > init_data[type].max_count))
 		return;
-#else
-	if (init_data[type].max_count &&
-	    (atomic64_read(&(ac_idx[type].logging_count)) > init_data[type].max_count))
-		return;
-#endif
 
 	if (!(auto_comment_info->fault_flag & 1 << type)) {
 		auto_comment_info->fault_flag |= 1 << type;
