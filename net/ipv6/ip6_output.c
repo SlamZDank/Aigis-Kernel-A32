@@ -1281,8 +1281,7 @@ static int ip6_setup_cork(struct sock *sk, struct inet_cork_full *cork,
 			mtu = np->frag_size;
 	}
 	cork->base.fragsize = mtu;
-	cork->base.gso_size = sk->sk_type == SOCK_DGRAM &&
-			      sk->sk_protocol == IPPROTO_UDP ? ipc6->gso_size : 0;
+	cork->base.gso_size = sk->sk_type == SOCK_DGRAM ? ipc6->gso_size : 0;
 
 	if (dst_allfrag(xfrm_dst_path(&rt->dst)))
 		cork->base.flags |= IPCORK_ALLFRAG;
