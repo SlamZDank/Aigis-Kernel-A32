@@ -85,11 +85,11 @@
 #include <linux/io_record.h>
 #endif
 
+#include "internal.h"
 #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 #include <linux/susfs_def.h>
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 
-#include "internal.h"
 
 #ifdef CONFIG_SPECULATIVE_PAGE_FAULT
 #define SPECULATIVE_PAGE_FAULT_SUPPORT_FILEMAP 1

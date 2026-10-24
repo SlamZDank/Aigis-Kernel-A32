@@ -601,6 +601,7 @@ error:
 #ifdef CONFIG_KSU
 extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
 #endif
+
 SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 {
 	struct user_namespace *ns = current_user_ns();
@@ -659,12 +660,11 @@ SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 	if (retval < 0)
 		goto error;
 
-#ifdef CONFIG_KSU
+#ifdef CONFIG_KSU_SUSFS
 	retval = ksu_handle_setresuid(ruid, euid, suid);
 	if (retval)
 		goto error;
 #endif
-
 	return commit_creds(new);
 
 error:
@@ -1168,11 +1168,6 @@ DECLARE_RWSEM(uts_sem);
  * Instead we map 3.x to 2.6.40+x, so e.g. 3.0 would be 2.6.40
  * And we map 4.x to 2.6.60+x, so 4.0 would be 2.6.60.
  */
-#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
-extern struct static_key_false susfs_is_uname_spoof_buffer_set;
-extern void susfs_spoof_uname(struct new_utsname* tmp);
-#endif
-
 static int override_release(char __user *release, size_t len)
 {
 	int ret = 0;
@@ -1199,6 +1194,10 @@ static int override_release(char __user *release, size_t len)
 	return ret;
 }
 
+#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
+extern struct static_key_false susfs_is_uname_spoof_buffer_set;
+extern void susfs_spoof_uname(struct new_utsname *tmp);
+#endif
 SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
 {
 	struct new_utsname tmp;

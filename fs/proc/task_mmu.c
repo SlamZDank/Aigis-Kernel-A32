@@ -19,10 +19,10 @@
 #include <linux/shmem_fs.h>
 #include <linux/uaccess.h>
 #include <linux/mm_inline.h>
-#include <linux/freezer.h>
 #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
 #include <linux/susfs_def.h>
-#endif
+#endif // #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
+#include <linux/freezer.h>
 
 #include <asm/elf.h>
 #include <asm/tlb.h>
@@ -926,6 +926,11 @@ static int show_smap(struct seq_file *m, void *v)
 	struct mem_size_stats mss;
 
 	memset(&mss, 0, sizeof(mss));
+
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+	if (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
+		return 0;
+#endif
 
 	smap_gather_stats(vma, &mss);
 
@@ -2386,55 +2391,13 @@ show_filemap_vma(struct seq_file *m, struct vm_area_struct *vma)
 {
 	struct file *file = vma->vm_file;
 	struct proc_filemap_private *priv = m->private;
-	struct inode *inode;
 	char strbuf[MAX_PAGE_BOOST_FILEPATH_LEN];
 	char *pathname;
-
-#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
-	char *spoofed_redirected_name = NULL;
-	unsigned long spoofed_ino = 0;
-	dev_t spoofed_dev = 0;
-	int srcu_idx;
-#endif
 
 	if (!file)
 		return;
 
-	inode = file_inode(file);
-
-#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
-	if (SUSFS_IS_INODE_OPEN_REDIRECT(inode)) {
-		srcu_idx = srcu_read_lock(&susfs_srcu_open_redirect);
-
-		if (!susfs_open_redirect_spoof_show_map_vma_srcu(
-				inode,
-				&spoofed_ino,
-				&spoofed_dev,
-				&spoofed_redirected_name)) {
-			if (priv->show_list &&
-			    spoofed_redirected_name &&
-			    (!strncmp(spoofed_redirected_name, "/data", 5) ||
-			     !strncmp(spoofed_redirected_name, "/system", 7))) {
-				seq_puts(m, spoofed_redirected_name);
-				seq_putc(m, '\n');
-			}
-
-			srcu_read_unlock(&susfs_srcu_open_redirect,
-					 srcu_idx);
-			return;
-		}
-
-		srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
-	}
-#endif
-
-#ifdef CONFIG_KSU_SUSFS_SUS_MAP
-	if (SUSFS_IS_INODE_SUS_MAP(inode))
-		return;
-#endif
-
-	pathname = d_path(&file->f_path, strbuf,
-			  MAX_PAGE_BOOST_FILEPATH_LEN);
+	pathname = d_path(&file->f_path, strbuf, MAX_PAGE_BOOST_FILEPATH_LEN);
 	if (IS_ERR(pathname))
 		return;
 

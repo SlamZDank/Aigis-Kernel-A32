@@ -27,7 +27,7 @@
 #include <linux/compiler.h>
 #ifdef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
 #include <linux/susfs_def.h>
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
 #include <asm/sections.h>
 
 #ifdef CONFIG_KALLSYMS_ALL

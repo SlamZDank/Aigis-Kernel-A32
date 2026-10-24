@@ -6,7 +6,6 @@
 #include <linux/fdtable.h>
 #include <linux/namei.h>
 #include <linux/pid.h>
-#include <linux/ptrace.h>
 #include <linux/security.h>
 #include <linux/file.h>
 #include <linux/seq_file.h>
@@ -15,7 +14,7 @@
 #include <linux/proc_fs.h>
 #ifdef CONFIG_KSU_SUSFS
 #include <linux/susfs_def.h>
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS
 
 #include "../mount.h"
 #include "internal.h"
@@ -23,19 +22,12 @@
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 extern int susfs_get_non_sus_mnt_id_from_mnt(struct mount *orig_mnt);
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 extern bool susfs_is_inode_sus_kstat(struct inode *inode, bool *out_is_fuse);
-extern void susfs_sus_kstat_spoof_proc_fd_seq_show(int *out_target_mnt_id,
-						   unsigned long *out_target_ino, dev_t target_dev);
-#endif
-
-#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
-extern int susfs_open_redirect_spoof_seq_show(struct inode *inode, int *out_mnt_id,
-					      unsigned long *out_ino);
-#endif
-
+extern void susfs_sus_kstat_spoof_proc_fd_seq_show(int *out_target_mnt_id, unsigned long *out_target_ino, dev_t target_dev);
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 static int seq_show(struct seq_file *m, void *v)
 {
 	struct files_struct *files = NULL;
@@ -76,50 +68,40 @@ static int seq_show(struct seq_file *m, void *v)
 	if (susfs_is_current_app_uid()) {
 		struct inode *inode = file_inode(file);
 		bool is_fuse = false;
-
 		if (susfs_is_inode_sus_kstat(inode, &is_fuse)) {
 			int mnt_id = real_mount(file->f_path.mnt)->mnt_id;
 			unsigned long ino = inode->i_ino;
-
 			susfs_sus_kstat_spoof_proc_fd_seq_show(&mnt_id, &ino, inode->i_sb->s_dev);
 			seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
-					(long long)file->f_pos, f_flags, mnt_id, ino);
+					(long long)file->f_pos, f_flags,
+					mnt_id,
+					ino);
 			goto bypass_orig_flow;
 		}
 	}
-#endif
-
-#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
-	if (SUSFS_IS_INODE_OPEN_REDIRECT(file_inode(file))) {
-		int mnt_id = 0;
-		unsigned long ino = 0;
-
-		if (!susfs_open_redirect_spoof_seq_show(file_inode(file), &mnt_id, &ino)) {
-			seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
-					(long long)file->f_pos, f_flags, mnt_id, ino);
-			goto bypass_orig_flow;
-		}
-	}
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 	if (likely(susfs_is_current_proc_umounted())) {
 		struct mount *mnt = real_mount(file->f_path.mnt);
-
 		if (mnt->mnt_id >= DEFAULT_KSU_MNT_ID) {
 			struct path path;
 			char *pathname = kmalloc(PAGE_SIZE, GFP_KERNEL);
 			char *dpath;
 
-			if (!pathname)
+			if (!pathname) {
 				goto orig_flow;
+			}
 			dpath = d_path(&file->f_path, pathname, PAGE_SIZE);
-			if (IS_ERR(dpath))
+			if (!dpath) {
 				goto out_kfree;
-			if (kern_path(dpath, 0, &path))
+			}
+			if (kern_path(dpath, 0, &path)) {
 				goto out_kfree;
-			if (!d_backing_inode(path.dentry))
+			}
+			if (!d_backing_inode(path.dentry)) {
 				goto out_path_put;
+			}
 
 			seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
 					(long long)file->f_pos, f_flags,
@@ -132,18 +114,19 @@ out_path_put:
 			path_put(&path);
 out_kfree:
 			kfree(pathname);
+			goto orig_flow;
 		}
 	}
 orig_flow:
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
 	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\n",
 		   (long long)file->f_pos, f_flags,
 		   real_mount(file->f_path.mnt)->mnt_id);
 
-#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
+#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_SUS_KSTAT)
 bypass_orig_flow:
-#endif
+#endif // #if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_SUS_KSTAT)
 	show_fd_locks(m, file, files);
 	if (seq_has_overflowed(m))
 		goto out;
@@ -156,30 +139,8 @@ out:
 	return 0;
 }
 
-static int proc_fdinfo_access_allowed(struct inode *inode)
-{
-	bool allowed = false;
-	struct task_struct *task = get_proc_task(inode);
-
-	if (!task)
-		return -ESRCH;
-
-	allowed = ptrace_may_access(task, PTRACE_MODE_READ_FSCREDS);
-	put_task_struct(task);
-
-	if (!allowed)
-		return -EACCES;
-
-	return 0;
-}
-
 static int seq_fdinfo_open(struct inode *inode, struct file *file)
 {
-	int ret = proc_fdinfo_access_allowed(inode);
-
-	if (ret)
-		return ret;
-
 	return single_open(file, seq_show, inode);
 }
 
@@ -421,7 +382,7 @@ proc_fdinfo_instantiate(struct inode *dir, struct dentry *dentry,
 	struct proc_inode *ei;
 	struct inode *inode;
 
-	inode = proc_pid_make_inode(dir->i_sb, task, S_IFREG | S_IRUGO);
+	inode = proc_pid_make_inode(dir->i_sb, task, S_IFREG | S_IRUSR);
 	if (!inode)
 		goto out;
 
@@ -457,13 +418,7 @@ const struct inode_operations proc_fdinfo_inode_operations = {
 	.setattr	= proc_setattr,
 };
 
-static int proc_open_fdinfo(struct inode *inode, struct file *file)
-{
-	return proc_fdinfo_access_allowed(inode);
-}
-
 const struct file_operations proc_fdinfo_operations = {
-	.open		= proc_open_fdinfo,
 	.read		= generic_read_dir,
 	.iterate_shared	= proc_readfdinfo,
 	.llseek		= generic_file_llseek,

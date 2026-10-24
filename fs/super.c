@@ -36,14 +36,15 @@
 #include <linux/fsnotify.h>
 #include <linux/lockdep.h>
 #include <linux/user_namespace.h>
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#include "internal.h"
+#ifdef CONFIG_KSU_SUSFS
 #include <linux/susfs_def.h>
 #include <linux/jump_label.h>
-
+#endif // #ifdef CONFIG_KSU_SUSFS
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 extern bool susfs_is_current_ksu_domain(void);
 extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
-#endif
-#include "internal.h"
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
 /* @fs.sec -- 89e449513e5bea6196d9aaf62a6936ae -- */
 void (*ufs_debug_func)(void *) = NULL;
@@ -998,9 +999,7 @@ int get_anon_bdev(dev_t *p)
 	if (ida_pre_get(&unnamed_dev_ida, GFP_ATOMIC) == 0)
 		return -ENOMEM;
 	spin_lock(&unnamed_dev_lock);
-	/* Keep all unnamed_dev_ida operations under the existing lock. */
 	error = ida_get_new_above(&unnamed_dev_ida, max(unnamed_dev_start, min_dev), &dev);
-	/* Early KSU allocations must not advance the ordinary allocation hint. */
 	if (!error && !min_dev)
 		unnamed_dev_start = dev + 1;
 	spin_unlock(&unnamed_dev_lock);

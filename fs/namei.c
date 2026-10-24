@@ -42,11 +42,11 @@
 #ifdef CONFIG_FSCRYPT_SDP
 #include <linux/fscrypto_sdp_name.h>
 #endif
+#include "internal.h"
+#include "mount.h"
 #if defined(CONFIG_KSU_SUSFS_SUS_PATH) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
 #include <linux/susfs_def.h>
 #endif
-#include "internal.h"
-#include "mount.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/namei.h>
@@ -3831,7 +3831,7 @@ static int do_tmpfile(struct nameidata *nd, unsigned flags,
 		if (fake_filename && !IS_ERR(fake_filename)) {
 			struct path fake_path;
 
-			/* filename_lookup() consumes fake_filename. */
+			/* filename_lookup() consumes fake_filename */
 			error = filename_lookup(old_dfd, fake_filename, flags | LOOKUP_DIRECTORY, &fake_path, NULL);
 			path_put(&path);
 			if (unlikely(error))
@@ -3887,7 +3887,7 @@ static int do_o_path(struct nameidata *nd, unsigned flags, struct file *file)
 			if (fake_filename && !IS_ERR(fake_filename)) {
 				struct path fake_path;
 
-				/* filename_lookup() consumes fake_filename. */
+				/* filename_lookup() consumes fake_filename */
 				error = filename_lookup(old_dfd, fake_filename, flags, &fake_path, NULL);
 				path_put(&path);
 				if (unlikely(error))

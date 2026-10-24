@@ -34,17 +34,19 @@
 #ifdef CONFIG_RUSTUH_KDP_NS
 #include <linux/rustkdp.h>
 #endif
-#ifdef CONFIG_KSU_SUSFS
-#include <linux/susfs_def.h>
-#endif
 #include "pnode.h"
 #include "internal.h"
-
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs_def.h>
+#endif // #ifdef CONFIG_KSU_SUSFS
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 extern bool susfs_is_current_ksu_domain(void);
 extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
+
 #define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */
-#endif
+
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+
 
 #ifdef CONFIG_KDP_NS
 #define KDP_MOUNT_SYSTEM "/system"
@@ -323,8 +325,8 @@ static void mnt_free_id(struct mount *mnt)
 	int id = mnt->mnt_id;
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	if (mnt->mnt.mnt_flags & VFSMOUNT_MNT_FLAGS_KSU_UNSHARED_MNT)
-		return;
+    if (unlikely(mnt->mnt.mnt_flags & VFSMOUNT_MNT_FLAGS_KSU_UNSHARED_MNT))
+        return;
 
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
@@ -540,7 +542,7 @@ out_free_cache:
 	kmem_cache_free(mnt_cache, mnt);
 	return NULL;
 }
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
 static struct mount *alloc_vfsmnt(const char *name)
 {
@@ -1118,11 +1120,12 @@ struct mount *__lookup_mnt(struct vfsmount *mnt, struct dentry *dentry)
 {
 	struct hlist_head *head = m_hash(mnt, dentry);
 	struct mount *p;
-
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	// Hide SUS mounts for processes already marked as umounted.  Returning
-	// the first legitimate mount also covers zygote-next descendants without
-	// requiring a second physical unmount pass.
+	// - The hook here is needed as a temp solution to hide sus mnts for zygote_next
+	//   spawned process since it just inherits the init mount namespace, and here
+	//   we also spoof for the zygote spawned processes that are marked umounted,
+	//   with this hack, we do not even need to umount those sus mounts.
+	// - The solution here is simply to return the legit mount.
 	if (susfs_is_current_proc_umounted()) {
 		hlist_for_each_entry_rcu(p, head, mnt_hash)
 			if (p->mnt_id < DEFAULT_KSU_MNT_ID && &p->mnt_parent->mnt == mnt && p->mnt_mountpoint == dentry)
@@ -1130,6 +1133,7 @@ struct mount *__lookup_mnt(struct vfsmount *mnt, struct dentry *dentry)
 		return NULL;
 	}
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+
 
 	hlist_for_each_entry_rcu(p, head, mnt_hash)
 #if defined(CONFIG_KDP_NS) || defined(CONFIG_RUSTUH_KDP_NS)
@@ -1593,7 +1597,6 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 #if defined(CONFIG_KDP_NS) || defined(CONFIG_RUSTUH_KDP_NS)
 	int nsflags;
 #endif
-
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 	bool is_mnt_ksu_unshared = false;
 
@@ -1623,11 +1626,12 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 		mnt = susfs_alloc_non_unshare_ksu_vfsmnt(old->mnt_devname);
 		goto bypass_orig_flow;
 	}
-#endif
-	mnt = alloc_vfsmnt(old->mnt_devname);
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 bypass_orig_flow:
 #endif
+
+	mnt = alloc_vfsmnt(old->mnt_devname);
 	if (!mnt)
 		return ERR_PTR(-ENOMEM);
 
@@ -1694,7 +1698,6 @@ bypass_orig_flow:
 
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	/* ID ownership follows the allocation path, not the current static key. */
 	mnt->mnt.mnt_flags &= ~VFSMOUNT_MNT_FLAGS_KSU_UNSHARED_MNT;
 	if (unlikely(is_mnt_ksu_unshared))
 		mnt->mnt.mnt_flags |= VFSMOUNT_MNT_FLAGS_KSU_UNSHARED_MNT;
@@ -1767,7 +1770,6 @@ bypass_orig_flow:
 
  out_free:
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	/* Failure can precede mnt_flags initialization. */
 	if (!is_mnt_ksu_unshared)
 #endif
 		mnt_free_id(mnt);
@@ -4593,7 +4595,6 @@ const struct proc_ns_operations mntns_operations = {
 	.owner		= mntns_owner,
 };
 
-
 #ifdef CONFIG_KSU_SUSFS
 /* - To retrieve the non sus mnt_id from mount */
 int susfs_get_non_sus_mnt_id_from_mnt(struct mount *orig_mnt) {
@@ -4615,8 +4616,6 @@ struct vfsmount *susfs_get_non_sus_vfsmnt_from_vfsmnt(struct vfsmount *vfsmnt) {
 	struct mount *mnt = real_mount(vfsmnt);
 
 	if (mnt->mnt_id < DEFAULT_KSU_MNT_ID) {
-		if (!mnt->mnt.mnt_root || IS_ERR(mnt->mnt.mnt_root))
-			return NULL;
 		mntget(&mnt->mnt);
 		dget(mnt->mnt.mnt_root);
 		return &mnt->mnt;
@@ -4624,11 +4623,12 @@ struct vfsmount *susfs_get_non_sus_vfsmnt_from_vfsmnt(struct vfsmount *vfsmnt) {
 
 	lock_mount_hash();
 	for (; mnt && mnt->mnt_parent && mnt != mnt->mnt_parent && mnt->mnt_id >= DEFAULT_KSU_MNT_ID; mnt = mnt->mnt_parent) { }
-	if (!mnt || !mnt->mnt.mnt_root || IS_ERR(mnt->mnt.mnt_root)) {
-		unlock_mount_hash();
-		return NULL;
-	}
 	mntget(&mnt->mnt);
+	if (!mnt->mnt.mnt_root || IS_ERR(mnt->mnt.mnt_root)) {
+		mntput(&mnt->mnt);
+		unlock_mount_hash();
+		return vfsmnt;
+	}
 	dget(mnt->mnt.mnt_root);
 	unlock_mount_hash();
 	return &mnt->mnt;

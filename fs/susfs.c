@@ -25,7 +25,6 @@
 #include <linux/susfs.h>
 #include "fuse/fuse_i.h"
 #include "mount.h"
-#include "internal.h"
 
 extern bool susfs_is_current_ksu_domain(void);
 extern void setup_selinux(const char *domain, struct cred *cred);
@@ -276,6 +275,9 @@ out_copy_to_user:
 static DEFINE_MUTEX(susfs_mutex_lock_sus_kstat);
 static DEFINE_HASHTABLE(SUS_KSTAT_HLIST, 14);
 
+extern int calculate_f_flags_wrapper(struct vfsmount *mnt);
+extern int statfs_by_dentry_wrapper(struct dentry *dentry, struct kstatfs *buf);
+
 static int susfs_mark_inode_sus_kstat(char *target_pathname, struct st_susfs_sus_kstat_hlist *new_entry, bool is_update) {
 	struct path path;
 	struct inode *inode = NULL;
@@ -310,10 +312,6 @@ static int susfs_mark_inode_sus_kstat(char *target_pathname, struct st_susfs_sus
 		new_entry->target_dev = fi->inode.i_sb->s_dev;
 		new_entry->spoofed_mnt_id = susfs_get_non_sus_mnt_id_from_mnt(real_mount(path.mnt));
 		no_sus_vfsmnt = susfs_get_non_sus_vfsmnt_from_vfsmnt(path.mnt);
-		if (!no_sus_vfsmnt) {
-			err = -ENOENT;
-			goto out_path_put_path;
-		}
 		err = statfs_by_dentry_wrapper(no_sus_vfsmnt->mnt_root, &new_entry->spoofed_kstatfs);
 		if (!err)
 			new_entry->spoofed_kstatfs.f_flags = calculate_f_flags_wrapper(no_sus_vfsmnt);
@@ -335,10 +333,6 @@ static int susfs_mark_inode_sus_kstat(char *target_pathname, struct st_susfs_sus
 	new_entry->target_dev = inode->i_sb->s_dev;
 	new_entry->spoofed_mnt_id = susfs_get_non_sus_mnt_id_from_mnt(real_mount(path.mnt));
 	no_sus_vfsmnt = susfs_get_non_sus_vfsmnt_from_vfsmnt(path.mnt);
-	if (!no_sus_vfsmnt) {
-		err = -ENOENT;
-		goto out_path_put_path;
-	}
 	err = statfs_by_dentry_wrapper(no_sus_vfsmnt->mnt_root, &new_entry->spoofed_kstatfs);
 	if (!err)
 		new_entry->spoofed_kstatfs.f_flags = calculate_f_flags_wrapper(no_sus_vfsmnt);
@@ -860,11 +854,11 @@ out_copy_to_user:
 
 void susfs_spoof_cmdline_or_bootconfig(struct seq_file *m) {
 	unsigned seq;
-	char *buf = kmalloc(SUSFS_FAKE_CMDLINE_OR_BOOTCONFIG_SIZE, GFP_KERNEL);
+	char *buf = (char *)kmalloc(SUSFS_FAKE_CMDLINE_OR_BOOTCONFIG_SIZE, GFP_KERNEL);
 
-	if (!buf)
+	if (!buf) {
 		return;
-
+	}
 	do {
 		seq = read_seqbegin(&susfs_fake_cmdline_or_bootconfig_seqlock);
 		strscpy(buf, fake_cmdline_or_bootconfig, SUSFS_FAKE_CMDLINE_OR_BOOTCONFIG_SIZE);
@@ -970,10 +964,8 @@ void susfs_add_open_redirect(void __user **user_info) {
 	new_entry_redirected->reversed_lookup_only = true;
 	new_entry_redirected->spoofed_mnt_id = new_entry_target->spoofed_mnt_id;
 	memcpy(&new_entry_redirected->spoofed_kstatfs, &new_entry_target->spoofed_kstatfs, sizeof(struct kstatfs));
-	strscpy(new_entry_redirected->info.target_pathname, info.redirected_pathname,
-		sizeof(new_entry_redirected->info.target_pathname));
-	strscpy(new_entry_redirected->info.redirected_pathname, info.target_pathname,
-		sizeof(new_entry_redirected->info.redirected_pathname));
+	strscpy(new_entry_redirected->info.target_pathname, info.redirected_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
+	strscpy(new_entry_redirected->info.redirected_pathname, info.target_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
 
 	// check for existing entries, delete it first if so
 	mutex_lock(&susfs_mutex_lock_open_redirect);
@@ -994,9 +986,7 @@ void susfs_add_open_redirect(void __user **user_info) {
 	}
 
 	if (is_first_dup_found) {
-		/* Remove the reverse entry for the old mapping, not the new target. */
-		hash_for_each_possible_safe(OPEN_REDIRECT_HLIST, tmp_entry_redirected, tmp_hlist_node,
-				node, tmp_entry_target->redirected_ino) {
+		hash_for_each_possible_safe(OPEN_REDIRECT_HLIST, tmp_entry_redirected, tmp_hlist_node, node, tmp_entry_target->redirected_ino) {
 			if (tmp_entry_redirected->reversed_lookup_only &&
 			    tmp_entry_redirected->target_dev == tmp_entry_target->redirected_dev &&
 			    tmp_entry_redirected->redirected_ino == tmp_entry_target->target_ino) {
@@ -1136,37 +1126,6 @@ int susfs_open_redirect_spoof_do_proc_readlink(struct inode *inode, char *tmp_bu
 	return -ENOENT;
 }
 
-int susfs_open_redirect_spoof_vfs_statfs(struct inode *inode, struct kstatfs *buf) {
-	struct st_susfs_open_redirect_hlist *entry = NULL;
-	int srcu_idx = srcu_read_lock(&susfs_srcu_open_redirect);
-
-	hash_for_each_possible_rcu(OPEN_REDIRECT_HLIST, entry, node, inode->i_ino) {
-		if (entry->reversed_lookup_only && entry->target_dev == inode->i_sb->s_dev) {
-			memcpy(buf, &entry->spoofed_kstatfs, sizeof(struct kstatfs));
-			srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
-			return 0;
-		}
-	}
-	srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
-	return -EINVAL;
-}
-
-int susfs_open_redirect_spoof_seq_show(struct inode *inode, int *out_mnt_id, unsigned long *out_ino) {
-	struct st_susfs_open_redirect_hlist *entry = NULL;
-	int srcu_idx = srcu_read_lock(&susfs_srcu_open_redirect);
-
-	hash_for_each_possible_rcu(OPEN_REDIRECT_HLIST, entry, node, inode->i_ino) {
-		if (entry->reversed_lookup_only && entry->target_dev == inode->i_sb->s_dev) {
-			*out_mnt_id = entry->spoofed_mnt_id;
-			*out_ino = entry->redirected_ino;
-			srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
-			return 0;
-		}
-	}
-	srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
-	return -EINVAL;
-}
-
 /* callers must hold and release the "susfs_srcu_open_redirect" lock themselves. */
 int susfs_open_redirect_spoof_show_map_vma_srcu(struct inode *inode, unsigned long *out_ino, dev_t *out_dev, char **out_spoofed_name) {
 	struct st_susfs_open_redirect_hlist *entry = NULL;
@@ -1277,8 +1236,9 @@ void susfs_get_enabled_features(void __user **user_info) {
 	if (!info) {
 		int err = -ENOMEM;
 
-		(void)copy_to_user(&((struct st_susfs_enabled_features __user *)*user_info)->err,
-				   &err, sizeof(err));
+		if (copy_to_user(&((struct st_susfs_enabled_features __user *)*user_info)->err,
+				 &err, sizeof(err)))
+			SUSFS_LOGE("copy_to_user() failed\n");
 		return;
 	}
 
