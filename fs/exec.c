@@ -1915,6 +1915,10 @@ extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 				void *envp, int *flags);
 extern int ksu_handle_post_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv,
 			void *envp, int *flags, int *retval);
+extern int ksu_setup_preinit_file_owned(struct filename **filename_ptr,
+				struct user_arg_ptr *argv);
+extern int ksu_preinit_handle_post_execveat(int *fd, struct filename **filename_ptr,
+		void *argv, void *envp, int *flags, int *retval, int *preinit_fd);
 #endif
 static int __do_execve_file(int fd, struct filename *filename,
 			    struct user_arg_ptr argv,
@@ -1928,10 +1932,32 @@ static int __do_execve_file(int fd, struct filename *filename,
 
 #ifdef CONFIG_KSU_SUSFS
 	bool is_su_session = false;
+	struct filename *preinit_filename = NULL;
+	struct user_arg_ptr preinit_argv, preinit_envp;
+	int preinit_fd = -1, preinit_exec_fd = 0, preinit_exec_flags = 0;
+	bool preinit_committed = false;
 #endif // #ifdef CONFIG_KSU_SUSFS
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
+#ifdef CONFIG_KSU_SUSFS
+	if (!file && filename && current->pid == 1) {
+		struct filename *original = filename;
+
+		preinit_fd = ksu_setup_preinit_file_owned(&filename, &argv);
+		if (preinit_fd >= 0) {
+			preinit_filename = original;
+			preinit_argv = argv;
+			preinit_envp = envp;
+			preinit_exec_fd = fd;
+			preinit_exec_flags = flags;
+		}
+	}
+retry_exec:
+#endif
+	pathbuf = NULL;
+	bprm = NULL;
+	displaced = NULL;
 #ifdef CONFIG_KSU_SUSFS
 	if (!filename || likely(susfs_is_current_proc_no_su()))
 		goto orig_flow;
@@ -2057,6 +2083,11 @@ orig_flow:
 	}
 
 	retval = exec_binprm(bprm);
+#ifdef CONFIG_KSU_SUSFS
+	/* flush_old_exec() has replaced the old mm: retry is no longer safe. */
+	if (preinit_filename && retval < 0 && !bprm->mm)
+		preinit_committed = true;
+#endif
 	if (retval < 0)
 		goto out;
 
@@ -2075,6 +2106,10 @@ orig_flow:
 	kfree(pathbuf);
 	if (filename)
 		putname(filename);
+#ifdef CONFIG_KSU_SUSFS
+	if (preinit_filename)
+		putname(preinit_filename);
+#endif
 	if (displaced)
 		put_files_struct(displaced);
 	return retval;
@@ -2098,6 +2133,26 @@ out_files:
 	if (displaced)
 		reset_files_struct(displaced);
 out_ret:
+#ifdef CONFIG_KSU_SUSFS
+	if (preinit_filename) {
+		/* reset_files_struct() must restore the table owning the fd first. */
+		(void)ksu_preinit_handle_post_execveat(&fd, &filename, &argv,
+				&envp, &flags, &retval, &preinit_fd);
+		putname(filename);
+		filename = preinit_filename;
+		preinit_filename = NULL;
+		if (!preinit_committed && !fatal_signal_pending(current)) {
+			pr_warn("KernelSU: preinit exec failed (%d), retrying init\n", retval);
+			fd = preinit_exec_fd;
+			flags = preinit_exec_flags;
+			argv = preinit_argv;
+			envp = preinit_envp;
+			file = NULL;
+			is_su_session = false;
+			goto retry_exec;
+		}
+	}
+#endif
 	if (filename)
 		putname(filename);
 	return retval;

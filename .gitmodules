@@ -1,6 +1,6 @@
 [submodule "KernelSU"]
 	path = KernelSU
-	url = https://github.com/ReSukiSU/ReSukiSU
+	url = https://github.com/Baka-SU/BakaSU
 	branch = main
 [submodule "NoMount"]
 	path = NoMount
