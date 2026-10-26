@@ -184,6 +184,13 @@ jobs:
           done
           ls -lh "$toolchain/bin/"*gcc* "$toolchain/bin/"*g++* 2>&1 | head -n 20 || true
 
+      - name: Prepare BakaSU compatibility patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR"
+          sh scripts/prepare_bakasu.sh --apply | tee "$OUT_DIR/bakasu-source.txt"
+
       - name: Show build metadata
         shell: bash
         run: |
@@ -226,6 +233,11 @@ jobs:
           echo "Defconfig: a32_slamzdank_defconfig"
           make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" -j$(nproc) a32_slamzdank_defconfig
 
+          # The BakaSU preinit runner is compiled during Kbuild and needs the
+          # target UAPI headers; missing headers hard-error with CONFIG_KSU_SUSFS=y.
+          echo "Installing target UAPI headers for the preinit runner"
+          make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" headers_install INSTALL_HDR_PATH="$OUT_DIR/usr"
+
           echo "Building kernel (${{ matrix.suffix }})..."
           make -C "$GITHUB_WORKSPACE" O="$OUT_DIR" -j$(nproc) \
             KCFLAGS=' -w -pipe -O3' \
@@ -248,6 +260,42 @@ jobs:
           name: build-log-${{ matrix.suffix }}-${{ github.run_id }}
           path: ${{ runner.temp }}/build.log
           if-no-files-found: warn
+
+      - name: Verify kernel outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking preinit and module blacklist integration..."
+          test -s "$OUT_DIR/arch/arm64/boot/Image"
+          test -s "$OUT_DIR/arch/arm64/boot/Image.gz"
+
+          test -s "$OUT_DIR/drivers/kernelsu/preinit/runner.elf"
+          "$TOOLCHAIN/bin/llvm-readelf" -h "$OUT_DIR/drivers/kernelsu/preinit/runner.elf" \
+            > "$RUNNER_TEMP/runner-elf-header.txt"
+          grep -q 'AArch64' "$RUNNER_TEMP/runner-elf-header.txt"
+          echo "preinit runner.elf is AArch64"
+
+          grep -q 'KSU_COMPAT_HAS_INSMOD_HOOK' \
+            "$OUT_DIR/drivers/kernelsu/feature/.module_blacklist.o.cmd"
+          echo "module blacklist built with the init_module hook"
+
+          "$TOOLCHAIN/bin/llvm-nm" --defined-only "$OUT_DIR/vmlinux" \
+            > "$OUT_DIR/bakasu-symbols.txt"
+          for symbol in ksu_setup_preinit_file_owned ksu_preinit_handle_post_execveat \
+                        ksu_preinit_runner_start ksu_handle_init_module ksu_handle_finit_module; do
+            grep -q " $symbol$" "$OUT_DIR/bakasu-symbols.txt" \
+              || { echo "::error::Missing kernel symbol: $symbol"; exit 1; }
+          done
+          echo "preinit and init_module hooks are present in vmlinux"
+
+          grep -q '^CONFIG_KSU=y$' "$OUT_DIR/.config"
+          grep -q '^CONFIG_KSU_SUSFS=y$' "$OUT_DIR/.config"
+          grep -q '^CONFIG_NOMOUNT=y$' "$OUT_DIR/.config"
+
+          echo "Kernel release: $(cat "$OUT_DIR/include/config/kernel.release")"
+          sha256sum \
+            "$OUT_DIR/arch/arm64/boot/Image" \
+            "$OUT_DIR/arch/arm64/boot/Image.gz"
 
       - name: Verify Image
         shell: bash
