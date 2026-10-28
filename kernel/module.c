@@ -309,11 +309,6 @@ int unregister_module_notifier(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(unregister_module_notifier);
 
-#ifdef CONFIG_KSU_SUSFS
-extern void ksu_handle_init_module(int *result);
-extern void ksu_handle_finit_module(int *result);
-#endif
-
 struct load_info {
 	const char *name;
 	Elf_Ehdr *hdr;
@@ -324,9 +319,6 @@ struct load_info {
 	struct _ddebug *debug;
 	unsigned int num_debug;
 	bool sig_ok;
-#ifdef CONFIG_KSU_SUSFS
-	bool ksu_blacklisted;
-#endif
 #ifdef CONFIG_KALLSYMS
 	unsigned long mod_kallsyms_init_off;
 #endif
@@ -3436,12 +3428,8 @@ static struct module *layout_and_allocate(struct load_info *info, int flags)
 	if (IS_ERR(mod))
 		return mod;
 
-	if (blacklisted(info->name)) {
-#ifdef CONFIG_KSU_SUSFS
-		info->ksu_blacklisted = true;
-#endif
+	if (blacklisted(info->name))
 		return ERR_PTR(-EPERM);
-	}
 
 	err = check_modinfo(mod, info, flags);
 	if (err)
@@ -4022,13 +4010,7 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 	if (err)
 		return err;
 
-	err = load_module(&info, uargs, 0);
-#ifdef CONFIG_KSU_SUSFS
-	/* Only acknowledge an explicit blacklist rejection, after cleanup. */
-	if (info.ksu_blacklisted)
-		ksu_handle_init_module(&err);
-#endif
-	return err;
+	return load_module(&info, uargs, 0);
 }
 
 #ifdef CONFIG_MNTL_SUPPORT
@@ -4079,12 +4061,7 @@ SYSCALL_DEFINE3(finit_module, int, fd, const char __user *, uargs, int, flags)
 	info.hdr = hdr;
 	info.len = size;
 
-	err = load_module(&info, uargs, flags);
-#ifdef CONFIG_KSU_SUSFS
-	if (info.ksu_blacklisted)
-		ksu_handle_finit_module(&err);
-#endif
-	return err;
+	return load_module(&info, uargs, flags);
 }
 
 static inline int within(unsigned long addr, void *start, unsigned long size)

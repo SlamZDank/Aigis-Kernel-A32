@@ -44,6 +44,13 @@ kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
 kbuild-file := $(if $(wildcard $(kbuild-dir)/Kbuild),$(kbuild-dir)/Kbuild,$(kbuild-dir)/Makefile)
 include $(kbuild-file)
 
+# Keep BakaSU's upstream sources unchanged; adapt only this built-in SUSFS build.
+ifeq ($(CONFIG_KSU_SUSFS),y)
+ifeq ($(obj),drivers/kernelsu)
+include $(srctree)/scripts/bakasu_preinit.mk
+endif
+endif
+
 # If the save-* variables changed error out
 ifeq ($(KBUILD_NOPEDANTIC),)
         ifneq ("$(save-cflags)","$(CFLAGS)")

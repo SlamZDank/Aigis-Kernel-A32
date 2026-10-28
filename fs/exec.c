@@ -1915,10 +1915,7 @@ extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 				void *envp, int *flags);
 extern int ksu_handle_post_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv,
 			void *envp, int *flags, int *retval);
-extern int ksu_setup_preinit_file_owned(struct filename **filename_ptr,
-				struct user_arg_ptr *argv);
-extern int ksu_preinit_handle_post_execveat(int *fd, struct filename **filename_ptr,
-		void *argv, void *envp, int *flags, int *retval, int *preinit_fd);
+#include "bakasu_preinit.h"
 #endif
 static int __do_execve_file(int fd, struct filename *filename,
 			    struct user_arg_ptr argv,
@@ -1942,11 +1939,12 @@ static int __do_execve_file(int fd, struct filename *filename,
 		return PTR_ERR(filename);
 #ifdef CONFIG_KSU_SUSFS
 	if (!file && filename && current->pid == 1) {
-		struct filename *original = filename;
+		struct filename *runner;
 
-		preinit_fd = ksu_setup_preinit_file_owned(&filename, &argv);
-		if (preinit_fd >= 0) {
-			preinit_filename = original;
+		runner = bakasu_preinit_prepare(filename, &argv, &preinit_fd);
+		if (runner) {
+			preinit_filename = filename;
+			filename = runner;
 			preinit_argv = argv;
 			preinit_envp = envp;
 			preinit_exec_fd = fd;
@@ -2136,8 +2134,7 @@ out_ret:
 #ifdef CONFIG_KSU_SUSFS
 	if (preinit_filename) {
 		/* reset_files_struct() must restore the table owning the fd first. */
-		(void)ksu_preinit_handle_post_execveat(&fd, &filename, &argv,
-				&envp, &flags, &retval, &preinit_fd);
+		bakasu_preinit_close(&preinit_fd);
 		putname(filename);
 		filename = preinit_filename;
 		preinit_filename = NULL;
