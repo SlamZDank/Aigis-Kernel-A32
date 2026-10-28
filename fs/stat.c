@@ -86,6 +86,10 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
 		      u32 request_mask, unsigned int query_flags)
 {
 	struct inode *inode = d_backing_inode(path->dentry);
+	int error;
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+	u32 susfs_mask = 0;
+#endif
 
 	memset(stat, 0, sizeof(*stat));
 	stat->result_mask |= STATX_BASIC_STATS;
@@ -95,51 +99,23 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
 	if (susfs_is_current_app_uid()) {
 		bool is_fuse = false;
 		if (susfs_is_inode_sus_kstat(d_backing_inode(path->dentry), &is_fuse)) {
-			if (!is_fuse) {
-				// stat->mnt_id = real_mount(path->mnt)->mnt_id;
-				// only for 5.10 kernel
-				stat->result_mask |= STATX_SUS_KSTAT;
-			}
-			// stat->mnt_id = real_mount(path->mnt)->mnt_id;
-			// only for 5.10 kernel
-			stat->result_mask |= STATX_SUS_KSTAT_FUSE;
+			susfs_mask = is_fuse ? STATX_SUS_KSTAT_FUSE : STATX_SUS_KSTAT;
 		}
 	}
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 
-	if (inode->i_op->getattr)
+	if (inode->i_op->getattr) {
+		error = inode->i_op->getattr(path, stat, request_mask, query_flags);
+		if (error)
+			return error;
+	} else {
+		generic_fillattr(inode, stat);
+	}
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-	{
-		int err = inode->i_op->getattr(path, stat, request_mask,
-					    query_flags);
-		if (!err) {
-			if (stat->result_mask & STATX_SUS_KSTAT) {
-				susfs_sus_kstat_spoof_generic_fillattr(inode, stat, STATX_SUS_KSTAT);
-				return err;
-			}
-			if (stat->result_mask & STATX_SUS_KSTAT_FUSE) {
-				susfs_sus_kstat_spoof_generic_fillattr(inode, stat, STATX_SUS_KSTAT_FUSE);
-			return err;
-			}
-		}
-		return err;
-	}
-	if (stat->result_mask & STATX_SUS_KSTAT) {
-		generic_fillattr(inode, stat);
-		susfs_sus_kstat_spoof_generic_fillattr(inode, stat, STATX_SUS_KSTAT);
-		return 0;
-	}
-	if (stat->result_mask & STATX_SUS_KSTAT_FUSE) {
-		generic_fillattr(inode, stat);
-		susfs_sus_kstat_spoof_generic_fillattr(inode, stat, STATX_SUS_KSTAT_FUSE);
-		return 0;
-	}
-#else
-		return inode->i_op->getattr(path, stat, request_mask,
-					    query_flags);
+	/* Keep SUSFS routing flags private, including on FD-based getattr paths. */
+	if (susfs_mask)
+		susfs_sus_kstat_spoof_generic_fillattr(inode, stat, susfs_mask);
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-
-	generic_fillattr(inode, stat);
 	return 0;
 }
 EXPORT_SYMBOL(vfs_getattr_nosec);

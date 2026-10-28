@@ -61,6 +61,10 @@ int set_task_ioprio(struct task_struct *task, int ioprio)
 }
 EXPORT_SYMBOL_GPL(set_task_ioprio);
 
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>
+#endif
+
 SYSCALL_DEFINE3(ioprio_set, int, which, int, who, int, ioprio)
 {
 	int class = IOPRIO_PRIO_CLASS(ioprio);
@@ -120,8 +124,14 @@ SYSCALL_DEFINE3(ioprio_set, int, which, int, who, int, ioprio)
 				break;
 			if (!who)
 				user = current_user();
-			else
+			else {
+#ifdef CONFIG_KSU_SUSFS
+				if (current_uid().val >= 10000 &&
+				    susfs_is_priority_uid_filtered(uid.val))
+					break;
+#endif
 				user = find_user(uid);
+			}
 
 			if (!user)
 				break;
@@ -213,8 +223,14 @@ SYSCALL_DEFINE2(ioprio_get, int, which, int, who)
 			uid = make_kuid(current_user_ns(), who);
 			if (!who)
 				user = current_user();
-			else
+			else {
+#ifdef CONFIG_KSU_SUSFS
+				if (current_uid().val >= 10000 &&
+				    susfs_is_priority_uid_filtered(uid.val))
+					break;
+#endif
 				user = find_user(uid);
+			}
 
 			if (!user)
 				break;

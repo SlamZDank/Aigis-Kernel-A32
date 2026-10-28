@@ -42,6 +42,12 @@
 #include "objsec.h"
 #include "conditional.h"
 
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs_ksu.h>
+#include <linux/jump_label.h>
+extern struct static_key_false fake_status_initialize_key;
+#endif
+
 enum sel_inos {
 	SEL_ROOT_INO = 2,
 	SEL_LOAD,	/* load policy */
@@ -230,11 +236,27 @@ static int sel_open_handle_status(struct inode *inode, struct file *filp)
 	struct selinux_fs_info *fsi = file_inode(filp)->i_sb->s_fs_info;
 	struct page    *status = selinux_kernel_status_page(fsi->state);
 
+#ifdef CONFIG_KSU_SUSFS
+	if (current_uid().val >= 10000 && READ_ONCE(ksu_selinux_hide_running)) {
+		struct page *page = READ_ONCE(fake_status);
+
+		if (page) {
+			filp->private_data = page;
+			return 0;
+		}
+	}
+#endif
 	if (!status)
 		return -ENOMEM;
 
 	filp->private_data = status;
 
+#ifdef CONFIG_KSU_SUSFS
+	/* initialize_fake_status() takes the status lock itself. */
+	if (static_branch_unlikely(&fake_status_initialize_key) &&
+	    !READ_ONCE(fake_status))
+		initialize_fake_status();
+#endif
 	return 0;
 }
 
@@ -787,13 +809,37 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size);
 static ssize_t sel_write_user(struct file *file, char *buf, size_t size);
 static ssize_t sel_write_member(struct file *file, char *buf, size_t size);
 
+#ifdef CONFIG_KSU_SUSFS
+static ssize_t susfs_sel_write_context(struct file *file, char *buf, size_t size)
+{
+	if (current_uid().val >= 10000 && READ_ONCE(ksu_selinux_hide_running))
+		return my_write_context(file, buf, size);
+	return sel_write_context(file, buf, size);
+}
+
+static ssize_t susfs_sel_write_access(struct file *file, char *buf, size_t size)
+{
+	if (current_uid().val >= 10000 && READ_ONCE(ksu_selinux_hide_running))
+		return my_write_access(file, buf, size);
+	return sel_write_access(file, buf, size);
+}
+#endif
+
 ssize_t (*write_op[])(struct file *, char *, size_t) = {
+#ifdef CONFIG_KSU_SUSFS
+	[SEL_ACCESS] = susfs_sel_write_access,
+#else
 	[SEL_ACCESS] = sel_write_access,
+#endif
 	[SEL_CREATE] = sel_write_create,
 	[SEL_RELABEL] = sel_write_relabel,
 	[SEL_USER] = sel_write_user,
 	[SEL_MEMBER] = sel_write_member,
+#ifdef CONFIG_KSU_SUSFS
+	[SEL_CONTEXT] = susfs_sel_write_context,
+#else
 	[SEL_CONTEXT] = sel_write_context,
+#endif
 };
 
 static ssize_t selinux_transaction_write(struct file *file, const char __user *buf, size_t size, loff_t *pos)

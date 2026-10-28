@@ -3,7 +3,8 @@
 The KernelSU submodule is an unmodified upstream BakaSU commit. No source patch,
 compiler-time replacement or version override is applied to it. Its UAPI v6 and
 embedded preinit runner remain upstream implementations. The kernel integrates
-only preinit; it does not add BakaSU kernel-module blacklist hooks.
+preinit and the parent adapters described in [the SUSFS notes](susfs-integration.md);
+it does not add BakaSU kernel-module blacklist hooks.
 
 ## Kernel adapter
 

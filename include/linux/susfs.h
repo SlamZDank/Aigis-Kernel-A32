@@ -160,6 +160,14 @@ struct st_susfs_sus_map {
 #endif
 
 /* avc log spoofing */
+struct st_susfs_priority_uid_filter {
+	char app_strings[SUSFS_APP_STR_BUF_SIZE];
+	int err;
+};
+
+int susfs_set_priority_uid_filter(void __user *arg);
+bool susfs_is_priority_uid_filtered(uid_t uid);
+
 struct st_susfs_avc_log_spoofing {
 	bool                                    enabled;
 	int                                     err;
