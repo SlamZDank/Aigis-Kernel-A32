@@ -40,7 +40,7 @@ jobs:
             ksu_dir: KernelSU-Next
             suffix: KSU-Next
     name: Build A325F (${{ matrix.suffix }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
 
     env:
