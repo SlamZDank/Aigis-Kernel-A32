@@ -184,12 +184,12 @@ jobs:
           done
           ls -lh "$toolchain/bin/"*gcc* "$toolchain/bin/"*g++* 2>&1 | head -n 20 || true
 
-      - name: Prepare BakaSU compatibility patch
+      - name: Check unmodified BakaSU source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$OUT_DIR"
-          sh scripts/prepare_bakasu.sh --apply | tee "$OUT_DIR/bakasu-source.txt"
+          sh scripts/prepare_bakasu.sh --check | tee "$OUT_DIR/bakasu-source.txt"
 
       - name: Show build metadata
         shell: bash
@@ -275,17 +275,45 @@ jobs:
           grep -q 'AArch64' "$RUNNER_TEMP/runner-elf-header.txt"
           echo "preinit runner.elf is AArch64"
 
-          grep -q 'KSU_COMPAT_HAS_INSMOD_HOOK' \
-            "$OUT_DIR/drivers/kernelsu/feature/.module_blacklist.o.cmd"
-          echo "module blacklist built with the init_module hook"
+          sh scripts/prepare_bakasu.sh --check
+          test -s "$OUT_DIR/drivers/kernelsu/feature/.module_blacklist.o.cmd"
+          if grep -q 'KSU_COMPAT_HAS_INSMOD_HOOK' \
+            "$OUT_DIR/drivers/kernelsu/feature/.module_blacklist.o.cmd"; then
+            echo '::error::Unexpected BakaSU kernel-module blacklist integration'
+            exit 1
+          fi
 
           "$TOOLCHAIN/bin/llvm-nm" --defined-only "$OUT_DIR/vmlinux" \
             > "$OUT_DIR/bakasu-symbols.txt"
-          for symbol in ksu_setup_preinit_file_owned ksu_preinit_handle_post_execveat \
-                        ksu_preinit_runner_start ksu_handle_init_module ksu_handle_finit_module; do
-            grep -q " $symbol$" "$OUT_DIR/bakasu-symbols.txt" \
-              || { echo "::error::Missing kernel symbol: $symbol"; exit 1; }
+
+          for symbol in ksu_setup_preinit_file ksu_preinit_runner_start ksu_preinit_runner_end \
+            susfs_set_priority_uid_filter susfs_is_priority_uid_filtered; do
+            grep -q " $symbol$" "$OUT_DIR/bakasu-symbols.txt" 
           done
+
+          grep -q 'KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE' \
+            "$OUT_DIR/drivers/kernelsu/feature/.selinux_hide.o.cmd"
+          "$TOOLCHAIN/bin/llvm-nm" --extern-only --defined-only "$OUT_DIR/vmlinux" \
+            > "$OUT_DIR/bakasu-global-symbols.txt"
+          for symbol in my_write_context my_write_access my_setprocattr \
+                        ksu_selinux_hide_running fake_status initialize_fake_status; do
+            grep -q " $symbol$" "$OUT_DIR/bakasu-global-symbols.txt"
+          done
+          if grep -q ' my_sel_open_handle_status$' "$OUT_DIR/bakasu-symbols.txt"; then
+            echo '::error::Unexpected duplicate BakaSU dynamic SELinux hook'
+            exit 1
+          fi
+
+          "$TOOLCHAIN/bin/llvm-strings" "$OUT_DIR/arch/arm64/boot/Image" \
+            > "$OUT_DIR/kernel-strings.txt"
+          ksu_version="$(git -C KernelSU describe --tags --abbrev=0)-$(git -C KernelSU rev-parse --short=8 HEAD)"
+          grep -Fx -- "$ksu_version" "$OUT_DIR/kernel-strings.txt"
+          if grep -Fx -- "$ksu_version-dirty" \
+            "$OUT_DIR/kernel-strings.txt"; then
+            echo '::error::BakaSU version unexpectedly contains -dirty'
+            exit 1
+          fi
+
           echo "preinit and init_module hooks are present in vmlinux"
 
           grep -q '^CONFIG_KSU=y$' "$OUT_DIR/.config"
