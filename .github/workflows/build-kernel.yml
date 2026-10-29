@@ -77,6 +77,12 @@ jobs:
           echo "pahole: $(command -v pahole)"
           pahole --version || true
 
+      - name: Provide libxml2.so.2 for ZyC lld
+        run: |
+          sudo apt-get install -y libxml2-16
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libxml2.so.16 /usr/lib/x86_64-linux-gnu/libxml2.so.2
+          sudo ldconfig
+
       - name: Cache ZyC toolchain
         id: cache-toolchain
         uses: actions/cache@v4
