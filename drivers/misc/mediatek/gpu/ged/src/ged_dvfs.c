@@ -1283,7 +1283,11 @@ static bool ged_dvfs_policy(
 		} else {
 			ged_log_buf_print(ghLogBuf_DVFS,
 			"[GED_K1] gpu_av_loading: 5566 / %u", gpu_loading);
-			gpu_loading = 0;
+			/* No new vsync timestamp was supplied (no GED KPI
+			 * producer on this port), but the utilization sample
+			 * taken above is still valid. Keep it instead of
+			 * forcing 0, otherwise the fallback policy pins the
+			 * GPU at its minimum frequency. */
 		}
 
 		g_ulPreDVFS_TS_us = gL_ulCalResetTS_us;

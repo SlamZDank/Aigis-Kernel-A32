@@ -36,8 +36,12 @@
 #endif
 
 #ifdef GED_ENABLE_FB_DVFS
-#define GED_DVFS_FB_TIMER_TIMEOUT 100000000
+#define GED_DVFS_FB_TIMER_TIMEOUT 16666666
+/* 16.6ms: sample GPU utilization once per frame while the GPU is on.
+ * The default 100ms timer never fires within short UI bursts, so the
+ * fallback DVFS policy never sees the load on ports without GED KPI. */
 #define GED_DVFS_TIMER_TIMEOUT g_fallback_time_out
+#define GED_DVFS_IDLE_TIMEOUT 500000000 /* 500ms */
 #else
 #define GED_DVFS_TIMER_TIMEOUT 25000000
 #endif
@@ -45,7 +49,10 @@
 #ifndef ENABLE_TIMER_BACKUP
 #undef GED_DVFS_TIMER_TIMEOUT
 #ifdef GED_ENABLE_FB_DVFS
-#define GED_DVFS_FB_TIMER_TIMEOUT 100000000
+#define GED_DVFS_FB_TIMER_TIMEOUT 16666666
+/* 16.6ms: sample GPU utilization once per frame while the GPU is on.
+ * The default 100ms timer never fires within short UI bursts, so the
+ * fallback DVFS policy never sees the load on ports without GED KPI. */
 #define GED_DVFS_TIMER_TIMEOUT g_fallback_time_out
 #else
 #define GED_DVFS_TIMER_TIMEOUT 25000000
@@ -375,8 +382,8 @@ enum hrtimer_restart ged_sw_vsync_check_cb(struct hrtimer *timer)
 			&gpu_block, &gpu_idle);
 		gpu_loading = gpu_av_loading;
 #endif
-		if (false == g_bGPUClock && 0 == gpu_loading
-			&& (temp - g_ns_gpu_on_ts > GED_DVFS_TIMER_TIMEOUT)) {
+		if (false == g_bGPUClock
+			&& (temp - g_ns_gpu_on_ts > GED_DVFS_IDLE_TIMEOUT)) {
 			if (psNotify) {
 				INIT_WORK(&psNotify->sWork,
 					ged_timer_switch_work_handle);
