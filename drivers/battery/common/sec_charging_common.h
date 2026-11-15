@@ -653,8 +653,14 @@ static inline struct power_supply *get_power_supply_by_name(char *name)
 	int ret = 0;	\
 	psy = get_power_supply_by_name((name));	\
 	if (!psy) {	\
-		pr_err("%s: Fail to "#function" psy (%s)\n",	\
-			__func__, (name));	\
+		/* A NULL name means the component does not exist on	\
+		 * this board (e.g. wireless_charger_name on a device	\
+		 * without wireless charging).  Printing an error for it	\
+		 * spams the kernel log every time the node is read.	\
+		 */	\
+		if ((name))	\
+			pr_err("%s: Fail to "#function" psy (%s)\n",	\
+				__func__, (name));	\
 		value.intval = 0;	\
 		ret = -ENOENT;	\
 	} else {	\
