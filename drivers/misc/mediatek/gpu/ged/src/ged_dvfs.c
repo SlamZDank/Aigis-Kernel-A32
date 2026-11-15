@@ -94,6 +94,16 @@ static unsigned int g_computed_freq_id;
 unsigned int g_gpu_timer_based_emu;
 unsigned int gpu_bw_err_debug;
 
+/* LumiROM: keep the GPU above the minimum OPP on the 90 Hz MT6768 port.
+ * The A34->A32 port has no GED KPI producer in SurfaceFlinger, so the
+ * fallback policy and the HyPer userspace hints otherwise leave the GPU
+ * at 299 MHz most of the time.  Level 11 is 663 MHz in the 30-entry
+ * MT6768 OPP table.  Thermal/power limits are applied later in
+ * mt_gpufreq_commit(), so they can still drop below this floor. */
+#if defined(CONFIG_MACH_MT6768)
+#define GED_GPU_MIN_LEVEL 11
+#endif
+
 static unsigned int gpu_pre_loading;
 unsigned int gpu_loading;
 unsigned int gpu_av_loading;
@@ -1620,6 +1630,13 @@ static void ged_dvfs_custom_boost_gpu_freq(unsigned int ui32FreqLevel)
 	/* 0 => The highest frequency */
 	/* table_num - 1 => The lowest frequency */
 	g_cust_boost_freq_id = ui32FreqLevel;
+
+#ifdef GED_GPU_MIN_LEVEL
+	if (g_cust_boost_freq_id > GED_GPU_MIN_LEVEL &&
+		GED_GPU_MIN_LEVEL < mt_gpufreq_get_dvfs_table_num())
+		g_cust_boost_freq_id = GED_GPU_MIN_LEVEL;
+#endif
+
 	gpu_cust_boost_freq = mt_gpufreq_get_freq_by_idx(g_cust_boost_freq_id);
 
 	if (g_cust_boost_freq_id < mt_gpufreq_get_cur_freq_index()) {
@@ -2305,6 +2322,13 @@ GED_ERROR ged_dvfs_system_init(void)
 	gpu_bottom_freq = mt_gpufreq_get_freq_by_idx(g_bottom_freq_id);
 
 	g_cust_boost_freq_id = mt_gpufreq_get_dvfs_table_num() - 1;
+
+#ifdef GED_GPU_MIN_LEVEL
+	if (g_cust_boost_freq_id > GED_GPU_MIN_LEVEL &&
+		GED_GPU_MIN_LEVEL < mt_gpufreq_get_dvfs_table_num())
+		g_cust_boost_freq_id = GED_GPU_MIN_LEVEL;
+#endif
+
 	gpu_cust_boost_freq = mt_gpufreq_get_freq_by_idx(g_cust_boost_freq_id);
 
 	g_cust_upbound_freq_id = 0;
