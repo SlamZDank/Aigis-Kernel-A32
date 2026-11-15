@@ -532,10 +532,19 @@ ssize_t sysfs_device_show_attrs(struct device *dev,
 		{
 			struct power_supply *psy_fg = NULL;
 
-			psy_fg = get_power_supply_by_name(battery->pdata->fuelgauge_name);
+			const char *fg_name = battery->pdata->fuelgauge_name;
+
+			/* The health HAL reads this attribute through an
+			 * instance whose pdata carries no fuelgauge_name, which
+			 * used to print "Fail to get psy ((null))" every 10 s
+			 * and return -1.  Fall back to the registered supply.
+			 */
+			if (!fg_name)
+				fg_name = "sm5714-fuelgauge";
+			psy_fg = get_power_supply_by_name(fg_name);
 			if (!psy_fg) {
-				pr_err("%s: Fail to get psy (%s)\n",
-						__func__, battery->pdata->fuelgauge_name);
+				pr_debug("%s: Fail to get psy (%s)\n",
+						__func__, fg_name);
 			} else {
 				if (psy_fg->desc->get_property != NULL) {
 					ret = psy_fg->desc->get_property(psy_fg,
