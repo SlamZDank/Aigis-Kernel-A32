@@ -7748,7 +7748,13 @@ static int sec_battery_probe(struct platform_device *pdev)
 	if (battery->pdata->charger_name == NULL)
 		battery->pdata->charger_name = "sec-charger";
 	if (battery->pdata->fuelgauge_name == NULL)
-		battery->pdata->fuelgauge_name = "sec-fuelgauge";
+		/* The A34 device tree does not carry battery,fuelgauge_name, so
+		 * this fallback is what runs on the port.  "sec-fuelgauge" does
+		 * not exist; the registered power supply is sm5714-fuelgauge,
+		 * and without a match get_power_supply_by_name() returns NULL,
+		 * which breaks ASOC and spams "Fail to get psy ((null))".
+		 */
+		battery->pdata->fuelgauge_name = "sm5714-fuelgauge";
 
 	/* create work queue */
 	battery->monitor_wqueue =
