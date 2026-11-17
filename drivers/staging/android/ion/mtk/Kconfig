@@ -19,3 +19,11 @@ config MTK_ION
 	  It set in xxxx_defconfig.mk
 	  default is on.
 
+config DMABUF_HEAPS_MTK_MM
+	bool "DMA-BUF heap /dev/dma_heap/mtk_mm backed by the MTK ION mm heap"
+	depends on MTK_ION && DMABUF_HEAPS
+	help
+	  Exposes the MTK ION multimedia heap as a DMA-BUF heap named mtk_mm
+	  so userspace built against libdmabufheap can allocate from it
+	  without /dev/ion. Buffers are ordinary MTK ION dma-bufs.
+

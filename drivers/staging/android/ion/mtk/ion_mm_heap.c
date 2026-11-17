@@ -1621,6 +1621,29 @@ size_t ion_mm_heap_total_memory(void)
 	return (size_t)(atomic64_read(&page_sz_cnt) * 4096);
 }
 
+/* kB of free pages parked in the mm heap page pools (cached + uncached) */
+unsigned long ion_mm_heap_pools_kb(void)
+{
+	unsigned long bytes = 0;
+	int i;
+
+	if (!system_heap)
+		return 0;
+
+	for (i = 0; i < num_orders; i++) {
+		struct ion_page_pool *pool = system_heap->pools[i];
+		struct ion_page_pool *cpool = system_heap->cached_pools[i];
+
+		bytes += (PAGE_SIZE << pool->order) *
+			 (unsigned long)(pool->high_count + pool->low_count);
+		bytes += (PAGE_SIZE << cpool->order) *
+			 (unsigned long)(cpool->high_count + cpool->low_count);
+	}
+
+	return bytes >> 10;
+}
+EXPORT_SYMBOL(ion_mm_heap_pools_kb);
+
 static void show_ion_system_heap_pool_size(struct seq_file *s)
 {
 	unsigned long uncached_total = 0;

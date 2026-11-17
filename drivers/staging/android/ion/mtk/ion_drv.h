@@ -274,6 +274,10 @@ int ion_drv_put_kernel_handle(void *kernel_handle);
  */
 size_t ion_mm_heap_total_memory(void);
 /**
+ * ion_mm_heap_pools_kb() - kB of free pages held in the mm heap page pools.
+ */
+unsigned long ion_mm_heap_pools_kb(void);
+/**
  * ion_mm_heap_total_memory() - get mm heap buffer detail info.
  */
 void ion_mm_heap_memory_detail(void);
