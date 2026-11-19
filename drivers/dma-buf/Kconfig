@@ -29,6 +29,20 @@ config SW_SYNC
 	  WARNING: improper use of this can result in deadlocking kernel
 	  drivers from userspace. Intended for test and debug only.
 
+config DEBUG_DMA_BUF_REF
+	bool "DEBUG Reference Count"
+	select STACKDEPOT
+	depends on DMA_SHARED_BUFFER
+	default n
+	---help---
+	  Save stack traces for every call to dma_buf_get and dma_buf_put, to
+	  help debug memory leaks. Potential leaks may be found by manually
+	  matching the get/put call stacks.  This feature consumes extra memory
+	  in order to save the stack traces using STACKDEPOT.
+
+	  Read the results from /sys/kernel/debug/dma_buf/bufinfo, which
+	  requires CONFIG_DEBUG_FS.
+
 menuconfig DMABUF_HEAPS
 	bool "DMA-BUF Userland Memory Heaps"
 	select DMA_SHARED_BUFFER
