@@ -507,7 +507,7 @@ inhdr_error:
 drop:
 	kfree_skb(skb);
 out:
-	return NET_RX_DROP;
+	return NULL;
 }
 
 /*
