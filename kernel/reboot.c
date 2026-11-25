@@ -294,16 +294,11 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	char buffer[256];
 	int ret = 0;
 #ifdef CONFIG_KSU_SUSFS
+	/* SUSFS inline hook: KernelSU and SUSFS commands (BakaSU handles them all,
+	 * including the priority UID filter). */
 	if (system_state == SYSTEM_RUNNING &&
-	    (u32)magic1 == SUSFS_KSU_INSTALL_MAGIC1) {
-		if ((u32)magic2 == SUSFS_MAGIC &&
-		    cmd == CMD_SUSFS_SET_PRIORITY_UID_FILTER) {
-			if (!uid_eq(current_uid(), GLOBAL_ROOT_UID))
-				return -EPERM;
-			return susfs_set_priority_uid_filter(arg);
-		}
+	    (u32)magic1 == SUSFS_KSU_INSTALL_MAGIC1)
 		return ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
-	}
 #endif
 
 	/* We only trust the superuser with rebooting the system. */

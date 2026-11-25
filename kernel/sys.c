@@ -193,9 +193,9 @@ out:
 	return error;
 }
 
-#ifdef CONFIG_KSU_SUSFS
-#include <linux/susfs.h>
-#endif
+#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
+extern bool susfs_is_priority_uid_filtered(uid_t uid);
+#endif // #ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
 
 SYSCALL_DEFINE3(setpriority, int, which, int, who, int, niceval)
 {
@@ -242,10 +242,10 @@ SYSCALL_DEFINE3(setpriority, int, which, int, who, int, niceval)
 		if (!who)
 			uid = cred->uid;
 		else if (!uid_eq(uid, cred->uid)) {
-#ifdef CONFIG_KSU_SUSFS
+#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
 			if (cred->uid.val >= 10000 && susfs_is_priority_uid_filtered(uid.val))
 				goto out_unlock;
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
 			user = find_user(uid);
 			if (!user)
 				goto out_unlock;	/* No processes for this user */
@@ -314,10 +314,10 @@ SYSCALL_DEFINE2(getpriority, int, which, int, who)
 		if (!who)
 			uid = cred->uid;
 		else if (!uid_eq(uid, cred->uid)) {
-#ifdef CONFIG_KSU_SUSFS
+#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
 			if (cred->uid.val >= 10000 && susfs_is_priority_uid_filtered(uid.val))
 				goto out_unlock;
-#endif
+#endif // #ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
 			user = find_user(uid);
 			if (!user)
 				goto out_unlock;	/* No processes for this user */

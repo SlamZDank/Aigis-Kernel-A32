@@ -1,5 +1,5 @@
 #!/bin/sh
-# Validate the unmodified upstream submodule; all adaptation lives in the kernel.
+# Validate the unmodified upstream submodule and the parent-kernel integration.
 set -eu
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -32,29 +32,88 @@ grep -q 'KSU_SYSCALL_NO_TARGET :=' \
 test -s "$KSU/kernel/preinit/runner/runner.c"
 test -s "$KSU/kernel/tools/code_generation/preinit_runner/preinit_runner.mk"
 
-# The upstream detection disables all automatic SELinux hooks. Require the
-# complete parent-side set so a partial port cannot silently disable hiding.
-grep -q 'susfs_selinux_setprocattr' "$ROOT/security/selinux/hooks.c"
-for hook in susfs_sel_write_context susfs_sel_write_access initialize_fake_status \
-            fake_status_initialize_key ksu_selinux_hide_running; do
-  grep -q "$hook" "$ROOT/security/selinux/selinuxfs.c"
+# BakaSU from 16 Nov 2026 hides its SELinux domain itself on 4.14 ("auto"
+# mode). The parent must not publish the old manual-hook API, otherwise
+# BakaSU's compat detection selects the manual mode and disables auto hiding.
+if grep -q 'susfs_selinux_setprocattr\|ksu_selinux_hide_running' \
+  "$ROOT/security/selinux/hooks.c"; then
+  echo "Parent still has the manual SELinux setprocattr hook" >&2
+  exit 1
+fi
+for hook in my_write_context my_write_access fake_status_initialize_key \
+            ksu_selinux_hide_running fake_status initialize_fake_status; do
+  if grep -q "$hook" "$ROOT/security/selinux/selinuxfs.c"; then
+    echo "Parent still has the manual SELinux hook '$hook'" >&2
+    exit 1
+  fi
 done
-grep -q 'ksu_selinux_hide_running' "$ROOT/security/selinux/hooks.c"
-grep -q 'KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE' "$KSU/kernel/tools/susfs_compat.mk"
-grep -q '#define __maybe_static$' "$KSU/kernel/feature/selinux_hide.c"
-grep -q 'int ksu_handle_sys_read(unsigned int fd, char __user \*\*buf_ptr, size_t \*count_ptr)' \
-  "$KSU/kernel/runtime/ksud_integration.c"
-grep -q 'KSU_INSTALL_MAGIC1, 0xDEADBEEF' "$KSU/kernel/include/uapi/supercall.h"
-for api in my_write_context my_write_access my_setprocattr initialize_fake_status; do
-  grep -q "$api" "$KSU/kernel/feature/selinux_hide.c"
-done
-if grep -qE 'CMD_SUSFS_SET_PRIORITY_UID_FILTER|susfs_parse_priority_app_strings' \
-  "$KSU/kernel/supercall/dispatch.c" "$KSU/kernel/manager/pkg_observer.c"; then
-  echo "BakaSU now has native priority UID integration; review the parent adapter before updating" >&2
+if grep -q 'my_setprocattr\|my_write_context\|my_write_access\|initialize_fake_status\|ksu_selinux_hide_running' \
+  "$ROOT/include/linux/susfs_ksu.h"; then
+  echo "Parent still declares the manual SELinux hook API" >&2
   exit 1
 fi
 
+# BakaSU's auto SELinux hide requires the SUSFS v2.4.0 exports.
+test -s "$KSU/kernel/feature/selinux_hide/selinux_hide_auto.c"
+for api in susfs_add_sus_type susfs_add_sus_avd_allowed_by_type; do
+  grep -q "$api" "$KSU/kernel/selinux/sepolicy.c" || {
+    echo "BakaSU auto SELinux hide does not use '$api'; review the kernel core" >&2
+    exit 1
+  }
+  grep -q "$api" "$ROOT/fs/susfs.c" || {
+    echo "SUSFS core does not export '$api' required by BakaSU" >&2
+    exit 1
+  }
+done
+
+# BakaSU dispatches the SUSFS commands natively; the parent must not intercept
+# the priority UID filter in the reboot syscall anymore.
+for cmd in CMD_SUSFS_SET_PRIORITY_UID_FILTER CMD_SUSFS_SET_SUS_PATH_UID_FILTER; do
+  grep -q "$cmd" "$KSU/kernel/supercall/dispatch.c" || {
+    echo "BakaSU does not dispatch '$cmd'; review the SUSFS core" >&2
+    exit 1
+  }
+done
+for parser in susfs_parse_priority_app_strings susfs_parse_sus_path_app_strings; do
+  grep -q "$parser" "$KSU/kernel/manager/throne_tracker.c" || {
+    echo "BakaSU does not call '$parser'; review the SUSFS package tracker" >&2
+    exit 1
+  }
+  grep -q "$parser" "$ROOT/fs/susfs.c" || {
+    echo "SUSFS core does not provide '$parser' required by BakaSU" >&2
+    exit 1
+  }
+done
+grep -q 'CMD_SUSFS_SET_PRIORITY_UID_FILTER' "$ROOT/kernel/reboot.c" && {
+  echo "Parent still intercepts CMD_SUSFS_SET_PRIORITY_UID_FILTER" >&2
+  exit 1
+}
+
+# The v2.4.0 core includes the priority filter; the old parent copy must be gone.
+test ! -e "$ROOT/fs/susfs_priority.c"
+if grep -q 'susfs_priority\.o' "$ROOT/fs/Makefile"; then
+  echo "fs/Makefile still builds the removed susfs_priority.o" >&2
+  exit 1
+fi
+grep -q 'CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER' "$ROOT/kernel/sys.c"
+grep -q 'CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER' "$ROOT/block/ioprio.c"
+grep -q '^CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER=y$' \
+  "$ROOT/arch/arm64/configs/a32_slamzdank_defconfig"
+grep -q 'susfs_set_priority_uid_filter' "$ROOT/fs/susfs.c"
+grep -q 'susfs_set_sus_path_uid_filter' "$ROOT/fs/susfs.c"
+
+# 4.14.357 has the 4-argument kernel_read(); the core falls back to the old
+# signature unless the build passes SUSFS_KERNEL_READ_NEW.
+grep -q 'SUSFS_KERNEL_READ_NEW' "$ROOT/fs/Makefile"
+grep -q 'SUSFS_KERNEL_READ_NEW' "$ROOT/fs/susfs.c"
+grep -q 'SUSFS_VERSION "v2.4.0"' "$ROOT/include/linux/susfs.h"
+
+test -s "$KSU/kernel/preinit/runner/runner.c"
+grep -q 'int ksu_handle_sys_read(unsigned int fd, char __user \*\*buf_ptr, size_t \*count_ptr)' \
+  "$KSU/kernel/runtime/ksud_integration.c"
+grep -q 'KSU_INSTALL_MAGIC1, 0xDEADBEEF' "$KSU/kernel/include/uapi/supercall.h"
+
 printf 'BakaSU upstream: %s\n' "$(git -C "$KSU" rev-parse HEAD)"
 printf 'BakaSU worktree: clean\n'
-printf 'BakaSU integration: parent-kernel preinit, manual SELinux and SUSFS command adapters; no submodule patches\n'
-printf 'SUSFS priority UID source: simonpunk gki-android12-5.10 eb95da080c76724c4962d0c62e9af3be37d9d439\n'
+printf 'BakaSU integration: parent-kernel preinit, auto SELinux hide, native SUSFS command dispatch; no submodule patches\n'
+printf 'SUSFS core: v2.4.0 (JackA1ltman 4.14 port), priority and sus_path UID filters\n'

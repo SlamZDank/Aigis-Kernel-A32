@@ -27,11 +27,12 @@ There is no kernel-local override for the UAPI support flag.
 
 ## Build
 
-`build_a325n.sh` checks that BakaSU is clean, installs target UAPI headers before
-compilation, and checks again after building. `scripts/bakasu_preinit.mk` is
-included by the parent `scripts/Makefile.build` only for the SUSFS
-`drivers/kernelsu` build. It requires the runner objects and orders preinit
-compilation after upstream's generated syscall header, without editing Kbuild.
+`scripts/prepare_bakasu.sh` checks that BakaSU is clean and that its preinit,
+SELinux-hide and SUSFS-command APIs match the parent integration. The CI build
+runs it before and after compiling. `scripts/bakasu_preinit.mk` is included by
+the parent `scripts/Makefile.build` only for the SUSFS `drivers/kernelsu`
+build. It requires the runner objects and orders preinit compilation after
+upstream's generated syscall header, without editing Kbuild.
 
 For direct make builds, run from the kernel root after configuring:
 
@@ -42,7 +43,7 @@ make O=/absolute/path/to/output ARCH=arm64 headers_install \
 make O=/absolute/path/to/output ARCH=arm64 -j8
 ```
 
-Use the same compiler settings as `build_a325n.sh` for a direct build.
+Use the same compiler settings as `build_kernel.sh` for a direct build.
 `bakasu-source.txt` records the upstream SHA and unmodified source state.
 The updater checks the candidate source API before updating its gitlink;
 implementation changes still require review and a clean build.

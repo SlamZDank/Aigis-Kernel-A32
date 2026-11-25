@@ -20,12 +20,9 @@ bool susfs_is_current_ksu_domain(void);
 int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 			  void __user **arg);
 
-/* Published by BakaSU's supported SUSFS manual SELinux hook mode. */
-extern bool ksu_selinux_hide_running;
-extern struct page *fake_status;
-void initialize_fake_status(void);
-ssize_t my_write_context(struct file *file, char *buf, size_t size);
-ssize_t my_write_access(struct file *file, char *buf, size_t size);
-int my_setprocattr(const char *name, void *value, size_t size);
+/*
+ * SELinux hide: BakaSU hooks selinuxfs and setprocattr itself on 4.14
+ * (its "auto" mode), so the kernel has no SELinux hide hooks of its own.
+ */
 #endif
 #endif
