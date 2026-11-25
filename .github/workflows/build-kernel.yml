@@ -293,20 +293,17 @@ jobs:
             > "$OUT_DIR/bakasu-symbols.txt"
 
           for symbol in ksu_setup_preinit_file ksu_preinit_runner_start ksu_preinit_runner_end \
-            susfs_set_priority_uid_filter susfs_is_priority_uid_filtered; do
+            susfs_set_priority_uid_filter susfs_is_priority_uid_filtered \
+            susfs_set_sus_path_uid_filter susfs_parse_priority_app_strings \
+            susfs_parse_sus_path_app_strings susfs_add_sus_type \
+            susfs_add_sus_avd_allowed_by_type susfs_get_data_path; do
             grep -q " $symbol$" "$OUT_DIR/bakasu-symbols.txt" 
           done
 
-          grep -q 'KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE' \
-            "$OUT_DIR/drivers/kernelsu/feature/.selinux_hide.o.cmd"
-          "$TOOLCHAIN/bin/llvm-nm" --extern-only --defined-only "$OUT_DIR/vmlinux" \
-            > "$OUT_DIR/bakasu-global-symbols.txt"
-          for symbol in my_write_context my_write_access my_setprocattr \
-                        ksu_selinux_hide_running fake_status initialize_fake_status; do
-            grep -q " $symbol$" "$OUT_DIR/bakasu-global-symbols.txt"
-          done
-          if grep -q ' my_sel_open_handle_status$' "$OUT_DIR/bakasu-symbols.txt"; then
-            echo '::error::Unexpected duplicate BakaSU dynamic SELinux hook'
+          test -s "$OUT_DIR/drivers/kernelsu/feature/selinux_hide/.selinux_hide.o.cmd"
+          if grep -q 'KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE' \
+            "$OUT_DIR/drivers/kernelsu/feature/selinux_hide/.selinux_hide.o.cmd"; then
+            echo '::error::BakaSU selected the manual SUSFS SELinux hook mode'
             exit 1
           fi
 
@@ -324,6 +321,7 @@ jobs:
 
           grep -q '^CONFIG_KSU=y$' "$OUT_DIR/.config"
           grep -q '^CONFIG_KSU_SUSFS=y$' "$OUT_DIR/.config"
+          grep -q '^CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER=y$' "$OUT_DIR/.config"
           grep -q '^CONFIG_NOMOUNT=y$' "$OUT_DIR/.config"
 
           echo "Kernel release: $(cat "$OUT_DIR/include/config/kernel.release")"
